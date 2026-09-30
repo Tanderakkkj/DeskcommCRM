@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 const RAIZ = process.cwd();
 const publish = readFileSync(join(RAIZ, ".github/workflows/publish-image.yml"), "utf8");
 const common = readFileSync(join(RAIZ, "hostgator-setup-kit/_common.sh"), "utf8");
+const manifestos = readFileSync(join(RAIZ, "hostgator-setup-kit/_manifestos.sh"), "utf8");
 const tagSoNasceDaMain = readFileSync(join(RAIZ, "tests/unit/tag-so-nasce-da-main.test.ts"), "utf8");
 const packaging = readFileSync(join(RAIZ, "tests/unit/packaging-artefato-do-cliente.test.ts"), "utf8");
 
@@ -42,8 +43,8 @@ function stringsDoArray(texto: string): string[] {
 }
 
 function imagensDoKit(): string[] {
-  const corpo = /trio_publicado\(\)\s*\{([\s\S]*?)\n\}/.exec(common)?.[1] ?? "";
-  const lista = /for\s+i\s+in\s+([^;]+);\s*do/.exec(corpo)?.[1] ?? "";
+  const corpo = /preflight_imagens_crm\(\)\s*\{([\s\S]*?)\n\}/.exec(manifestos)?.[1] ?? "";
+  const lista = /for\s+img\s+in\s+([^;]+);\s*do/.exec(corpo)?.[1] ?? "";
   return palavrasDaLista(lista);
 }
 
@@ -67,9 +68,12 @@ describe("listas de imagens Docker seguem a matriz de publicação", () => {
   });
 
   it("o kit confere exatamente todas as imagens publicadas", () => {
+    expect(common, "trio_publicado deve delegar ao preflight de plataforma").toMatch(
+      /trio_publicado\(\)\s*\{[\s\S]*?preflight_imagens_crm\s+"\$tag"\s+"\$plataforma"/,
+    );
     expect(
       imagensDoKit(),
-      "trio_publicado() divergiu da matriz: uma imagem pode ficar invisível para install/update",
+      "preflight_imagens_crm() divergiu da matriz: uma imagem pode ficar invisível para install/update",
     ).toEqual(IMAGENS);
   });
 

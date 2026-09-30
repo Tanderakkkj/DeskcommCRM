@@ -7,6 +7,7 @@ set -euo pipefail
 # por install.sh; instalação já em andamento no mesmo processo (install.sh)
 # mantém a escolha, já exportada em DESKCOMM_IDIOMA_CLI.
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_i18n.sh"
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_manifestos.sh"
 
 COMPOSE="docker-compose.prod.yml"
 COMPOSE_TRAEFIK="docker-compose.traefik.yml"
@@ -1379,11 +1380,9 @@ ghcr_status() {
 # tests/unit/listas-de-imagens-seguem-matriz.test.ts. Renomear a função
 # quebraria o leitor daquele teste sem ganhar nada: o que importa é a lista.
 trio_publicado() {
-  local tag="$1" i
-  for i in deskcommcrm deskcomm-worker deskcomm-scheduler deskcomm-voice-agent; do
-    [ "$(ghcr_status "$i" "$tag")" = "200" ] || return 1
-  done
-  return 0
+  local tag="$1" plataforma
+  plataforma="$(plataforma_oci_do_host "$(uname -m 2>/dev/null || true)")" || return 1
+  preflight_imagens_crm "$tag" "$plataforma"
 }
 
 # O .env está com pin PELA METADE? (app fixado numa versão, worker/scheduler não)
