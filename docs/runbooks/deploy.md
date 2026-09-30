@@ -74,6 +74,31 @@ commit → push → PR → merge na main → CI publica imagem → VPS puxa
    não um `up -d` na mão: ele puxa a tag publicada, re-aplica o `baseline.sql`,
    faz backup antes e grava as três imagens no `.env`.
 
+### Primeiro upgrade de uma instalação com kit antigo (ARM64)
+
+Um `update.sh` antigo pode sincronizar o Supabase e gravar cron **antes** de
+baixar o kit novo. Para a primeira transição, faça a sonda somente-leitura a
+partir de um clone separado da **mesma origem/fork** e da **mesma versão
+numérica** que será instalada. Substitua `vX.Y.Z` pela release publicada e
+`/var/www/crm` pela pasta real da instalação; não use `stable` ou `latest`:
+
+```bash
+CHECK_DIR="$(mktemp -d)"
+git clone --depth 1 --branch vX.Y.Z https://github.com/melgarafael/DeskcommCRM.git "$CHECK_DIR"
+bash "$CHECK_DIR/hostgator-setup-kit/preflight-upgrade.sh" \
+  --installation /var/www/crm --to vX.Y.Z
+cd /var/www/crm
+bash hostgator-setup-kit/update.sh --to vX.Y.Z
+```
+
+Se a sonda falhar, **não rode** o updater antigo. Ela confere as quatro imagens
+do CRM e a `WAHA_IMAGE` efetiva para a arquitetura da VPS sem alterar `.env`,
+volumes, contêineres ou banco. Uma WAHA personalizada/Plus incompatível precisa
+de uma imagem apropriada escolhida pelo operador; o kit não a substitui. Depois
+da primeira transição, o `update.sh` novo faz esse pré-voo antes de backup,
+checkout, cron e alterações no Supabase. O backup do updater continua necessário;
+uma sonda verde não equivale a backup nem garante rollback automático do banco.
+
 > **`latest` não é a última release.** Ele é publicado a partir da branch default, então
 > segue o **topo da `main`** — código ainda não lançado. Quem quer a última release usa
 > `stable`; quem opera um cliente usa o número da versão. Ver

@@ -37,36 +37,29 @@ done
 # em 401. Ver `recusar_projeto_de_outra_arvore` em _common.sh.
 recusar_projeto_de_outra_arvore || die "Atualização interrompida para não quebrar a instalação que está no ar."
 
-# Single-server: o Supabase desta VPS também tem dono. E o e-mail de acesso
-# (GoTrue) acompanha o SMTP do CRM AQUI, antes da decisão de versão: é este
-# comando que o instalador ensina a rodar depois de configurar /admin/email, e
-# "já está na versão mais recente" sairia sem entregar a troca.
+# Single-server: o Supabase desta VPS também tem dono. Isto só inspeciona;
+# sincronização de GoTrue fica depois da decisão de versão/preflight.
 if [ "${SINGLE_SERVER:-0}" = "1" ]; then
   recusar_supabase_de_outra_arvore || die "Atualização interrompida para não mexer no Supabase de outra instalação."
-  # A porta direta do GoTrue acompanha o `signup_mode` da instalação (#1653).
-  # Antes do SMTP de propósito: é o caminho que roda MESMO quando o update não
-  # tem nada a atualizar (a saída "você já está na versão mais recente" fica
-  # mais abaixo), então quem trocou "só convite" na tela e rodou o update leva
-  # o `DISABLE_SIGNUP` no mesmo comando — e é ele que fecha
-  # `POST /auth/v1/signup` para quem tem a anon key. Esta chamada roda com o
-  # kit ANTERIOR ao checkout; a da versão nova fica dentro de
-  # `atualizar_supabase_single_server` (_common.sh), mais abaixo.
-  if sincronizar_signup_mode_do_gotrue; then
-    dc_supabase up -d --no-deps auth >/dev/null 2>&1 || c_ylw "⚠ Não consegui reiniciar o auth do Supabase com o modo de cadastro (#1653)."
-  fi
-  if sincronizar_smtp_do_gotrue; then
-    dc_supabase up -d --no-deps auth >/dev/null 2>&1 || c_ylw "⚠ Não consegui reiniciar o auth do Supabase com o SMTP do CRM."
-  else
-    c_ylw "⚠ Sem SMTP no CRM: 'esqueci a senha' e a confirmação de cadastro não enviam e-mail. Configure em /admin/email e rode o update.sh de novo."
-  fi
 fi
 
-# ── 0. Liga o agente da tela ANTES de qualquer decisão de versão ─────────────
-# Instalar o cron aqui, e não no fim, é o que faz o bootstrap ter fim: os
-# caminhos "já está na versão mais recente" e "essa versão é anterior à sua"
-# saem do script mais abaixo, e se o cron dependesse deles a atualização pela
-# tela nunca ligaria justamente em quem já está em dia. É idempotente.
-setup_update_agent_cron
+# Manutenção idempotente também no caminho "já está na versão mais recente":
+# /admin/email, modo de cadastro e agente da tela precisam continuar aplicáveis
+# sem release nova. Num update REAL, porém, só roda depois do pré-voo OCI;
+# recusa de imagem não pode ter reiniciado auth nem gravado cron.
+manutencao_regular_sem_upgrade() {
+  if [ "${SINGLE_SERVER:-0}" = "1" ]; then
+    if sincronizar_signup_mode_do_gotrue; then
+      dc_supabase up -d --no-deps auth >/dev/null 2>&1 || c_ylw "⚠ Não consegui reiniciar o auth do Supabase com o modo de cadastro (#1653)."
+    fi
+    if sincronizar_smtp_do_gotrue; then
+      dc_supabase up -d --no-deps auth >/dev/null 2>&1 || c_ylw "⚠ Não consegui reiniciar o auth do Supabase com o SMTP do CRM."
+    else
+      c_ylw "⚠ Sem SMTP no CRM: 'esqueci a senha' e a confirmação de cadastro não enviam e-mail. Configure em /admin/email e rode o update.sh de novo."
+    fi
+  fi
+  setup_update_agent_cron
+}
 
 # ── 1. Tem atualização mesmo? ────────────────────────────────────────────────
 step "Procurando atualizações"
@@ -107,6 +100,7 @@ MESMA_TAG=""
 [ "$CURRENT_TAG" = "$TARGET_TAG" ] && MESMA_TAG=1
 
 if [ -n "$MESMA_TAG" ] && [ -z "$FORCE" ] && ! image_desatualizada; then
+  manutencao_regular_sem_upgrade
   # ⛔ O AVISO TAMBÉM DESCE AQUI — esta saída é anterior ao `manutencao_desce`
   # do fluxo normal (mais abaixo) e ao `restaurar_servicos` do caminho de erro.
   #
@@ -161,6 +155,19 @@ if [ -z "$FORCE" ] && [ -z "$MESMA_TAG" ]; then
        bash hostgator-setup-kit/update.sh --to $TARGET_TAG --force" ;;
   esac
 fi
+
+# Aqui já sabemos que há atualização real ou --force. Não tocamos em backup,
+# auth, cron, checkout, banco ou contêiner antes de validar o destino inteiro.
+# Arquiteturas sem imagens publicadas continuam com a recuperação por build
+# local, mas apenas se a guarda inicial reconheceu uma instalação existente.
+if PLATAFORMA_HOST="$(plataforma_oci_do_host "$(uname -m 2>/dev/null || true)")"; then
+  if ! preflight_atualizacao "$TARGET_TAG" "$PLATAFORMA_HOST"; then
+    refuse "A versão $TARGET_TAG não está completa para $PLATAFORMA_HOST ou a WAHA configurada é incompatível. Não alterei banco, imagens, cron nem código. Confira o registry e repita."
+  fi
+else
+  c_ylw "⚠ Arquitetura sem imagens publicadas: atualização legada usará recuperação por build local."
+fi
+manutencao_regular_sem_upgrade
 if [ -n "$MESMA_TAG" ] && [ -n "$FORCE" ]; then
   # Com --force na mesma tag ninguém conferiu a imagem: quem chega aqui pediu
   # para refazer (é a saída que a própria atualização ensina quando o banco não

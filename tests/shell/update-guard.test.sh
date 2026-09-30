@@ -78,6 +78,8 @@ cat > "$WORK/bin/docker" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$DOCKER_LOG"
 case " $* " in
+  *" imagetools inspect --raw "*) printf '%s' '{"schemaVersion":2,"manifests":[{"platform":{"os":"linux","architecture":"amd64"}},{"platform":{"os":"linux","architecture":"arm64"}}]}'; exit 0 ;;
+  *" imagetools inspect --format "*) printf 'linux/amd64\nlinux/arm64\n'; exit 0 ;;
   # Healthcheck do update.sh: "docker compose ... exec -T app node -e ...".
   # O dublê responde o que o app RESPONDE DE VERDADE — capturado da instalação
   # em produção. Antes aqui vinha {"status":"ok"}, um formato que /api/v1/health
@@ -143,6 +145,10 @@ STUB
 # como a prova lê o desfecho reportado.
 cat > "$WORK/bin/curl" <<'STUB'
 #!/usr/bin/env bash
+case "$*" in
+  *ghcr.io/token*) printf '%s' '{"token":"teste"}'; exit 0 ;;
+  *ghcr.io/v2/*) printf '%s' "${GHCR_STATUS:-200}"; exit 0 ;;
+esac
 payload=""
 while [ $# -gt 0 ]; do
   [ "$1" = "-d" ] && { shift; payload="$1"; }
@@ -191,7 +197,7 @@ export PATH="$WORK/bin:$PATH"
 # ── Instalação de mentira: repo git + kit + .env ─────────────────────────────
 PROJ="$WORK/deskcommcrm"
 mkdir -p "$PROJ/hostgator-setup-kit" "$PROJ/supabase"
-cp "$REPO_ROOT/hostgator-setup-kit/_common.sh" "$REPO_ROOT/hostgator-setup-kit/_i18n.sh" \
+cp "$REPO_ROOT/hostgator-setup-kit/_common.sh" "$REPO_ROOT/hostgator-setup-kit/_manifestos.sh" "$REPO_ROOT/hostgator-setup-kit/_i18n.sh" \
    "$REPO_ROOT/hostgator-setup-kit/update.sh" \
    "$REPO_ROOT/hostgator-setup-kit/agent.sh" "$REPO_ROOT/hostgator-setup-kit/manutencao.sh" \
    "$PROJ/hostgator-setup-kit/"
@@ -256,8 +262,17 @@ echo "── 2. Sem --to, a última tag publicada também é recusada se já est
 run_update
 check "aborta com status != 0" test "$RC" -ne 0
 check "não chegou a rodar o backup" test ! -f "$BACKUP_MARK"
-check "mesmo recusando, deixou o agente da tela instalado (com cd no diretório do projeto)" \
-  grep -q "cd ${PROJ} && bash hostgator-setup-kit/agent.sh" "$FAKE_CRONTAB"
+check "a recusa não agendou cron antes de validar o alvo" test ! -f "$FAKE_CRONTAB"
+
+echo "── 2b. Registro indisponível recusa uma atualização real sem efeitos"
+HEAD_ANTES="$(git rev-parse HEAD)"
+: > "$DOCKER_LOG"
+GHCR_STATUS=403 run_update --to v0.9.0 --force
+check "preflight rejeita pacote privado/indisponível" test "$RC" -ne 0
+check "não chamou o backup" test ! -f "$BACKUP_MARK"
+check "não trocou o código" test "$(git rev-parse HEAD)" = "$HEAD_ANTES"
+check "não agendou cron" test ! -f "$FAKE_CRONTAB"
+check "não recriou contêiner" bash -c "! grep -q ' up ' '$DOCKER_LOG'"
 
 echo "── 3. --force é a saída explícita de quem quer mesmo voltar"
 run_update --to v0.9.0 --force
@@ -762,8 +777,10 @@ echo "── 13. \"Nada a atualizar\" derruba o aviso de manutenção preso (PR 
 # que segura o apelido de rede `app` — seguia respondendo 503 por 6h30.
 cd "$PROJ" || exit 1
 : > "$DOCKER_LOG"
+rm -f "$FAKE_CRONTAB"
 IMAGEM_EM_DIA=1 AVISO_PRESO=1 run_update --to v1.1.0
 check "sai com sucesso pela saída \"nada a atualizar\"" test "$RC" -eq 0
+check "  no-op ainda instala o cron do agente" grep -q "cd ${PROJ} && bash hostgator-setup-kit/agent.sh" "$FAKE_CRONTAB"
 check "  e a saída é mesmo a antecipada" grep -q "Nada a atualizar" "$OUTFILE"
 check "  não rodou o backup (não virou atualização)" test ! -f "$BACKUP_MARK"
 check "  removeu o contêiner do aviso" grep -q "rm -f deskcomm-manutencao" "$DOCKER_LOG"
