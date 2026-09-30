@@ -1,7 +1,7 @@
 # Distribuição nativa AMD64 + ARM64 para self-host na Oracle
 
 Data: 2026-09-29
-Estado: proposta para revisão do dono (nenhuma mudança de runtime aprovada por este arquivo)
+Estado: aprovado pelo dono em 2026-09-30; implementação pendente
 
 ## Objetivo e limites
 
@@ -9,7 +9,7 @@ Permitir que um clone fresco instale e atualize o produto em Ubuntu `linux/arm64
 
 Não entram nesta mudança: migrar dados de outra VPS, obter credenciais/contas de terceiros, contratar SIP, ativar WAHA Plus, garantir throughput em uma configuração de CPU sem medição ou trocar o provedor de IA do usuário. Oracle é o primeiro alvo de prova; a distribuição deve ser por arquitetura, não por provedor de nuvem.
 
-## Estado medido e lacunas
+## Estado medido em 2026-09-29 e lacunas
 
 - As quatro imagens próprias (`deskcommcrm`, `deskcomm-worker`, `deskcomm-scheduler`, `deskcomm-voice-agent`) publicadas em `:stable` têm apenas `linux/amd64`. O workflow `.github/workflows/publish-image.yml` compila apenas essa plataforma. O job de `stable` espera as quatro imagens, mas a checagem do kit verifica presença de tags, não a plataforma dentro do manifesto.
 - `hostgator-setup-kit/_common.sh` recusa instalação nova em ARM64. Uma instalação ARM64 já existente pode entrar no caminho de recuperação por build local. Essa proteção deve ser preservada até existir release multi-arquitetura e então substituída por checagem da *versão alvo*.
@@ -18,6 +18,10 @@ Não entram nesta mudança: migrar dados de outra VPS, obter credenciais/contas 
 - `install-single-server.sh` prepara e sobe o Supabase antes de chamar a instalação do CRM. As 11 imagens do Compose oficial da ref pinada `self-hosted/v0.8.1` anunciam ARM64 e AMD64, mas falta um gate no CI e um preflight antes de criar a rede, o banco e as credenciais locais. Um bump dessa ref deve refazer a conferência.
 - O `update.sh` altera checkout e pode aplicar `baseline.sql` antes de puxar as novas imagens. Um manifesto ausente pode, portanto, ser descoberto tarde demais. O preflight precisa anteceder qualquer alteração no banco e qualquer parada de serviço.
 - O instalador atual pode cair em `stable`, `latest` ou build local quando falta um conjunto publicado. Em ARM64 novo, isso não deve converter erro de publicação em build demorado, emulação ou mistura de versões.
+
+### Atualização da base em 2026-09-30
+
+O upstream incorporou o PR #1938 entre a redação e a aprovação deste documento. Na `main` em `79e0a6b13`, as quatro imagens já são construídas em runners AMD64 e ARM64; os quatro `:stable` públicos já anunciam ambas as plataformas; o kit aceita `aarch64`/`arm64` e seleciona WAHA NOWEB ARM. Esses itens deixam de ser implementação nova e passam a ser invariantes a preservar. As lacunas ainda abertas são: verificar *a arquitetura presente* em cada imagem da versão alvo antes de instalar/atualizar; impedir fallback silencioso a canal ou build local em ARM64; proteger single-server e update antes de efeitos; sondar o runtime do `voice-agent` e os perfis de voz; automatizar a conferência das imagens Supabase pinadas; e documentar/provar a jornada Oracle ponta a ponta. O plano deve trabalhar sobre essa `main`, sem duplicar o PR #1938.
 
 ## Desenho da publicação
 
