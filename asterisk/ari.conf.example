@@ -1,5 +1,7 @@
 ; asterisk/ari.conf.example
-; Copiar pra ari.conf (git-ignorado, tem credencial real) e trocar a senha.
+; Referência avançada. O caminho normal é executar
+; bash hostgator-setup-kit/configurar-telefonia.sh: ele gera ari.conf privado
+; com o mesmo usuário e senha ARI guardados no .env.
 
 [general]
 enabled = yes

@@ -1,6 +1,8 @@
 ; asterisk/pjsip.conf.example
-; Copiar pra pjsip.conf (git-ignorado, tem credenciais reais) e preencher
-; com os dados do SEU provedor de trunk SIP genérico.
+; Referência avançada. O caminho normal é executar
+; bash hostgator-setup-kit/configurar-telefonia.sh: ele gera pjsip.conf
+; privado a partir dos dados do trunk SIP genérico, sem edição manual.
+; Provedores que exigem PJSIP não padrão precisam de configuração avançada.
 
 [transport-udp]
 type=transport
