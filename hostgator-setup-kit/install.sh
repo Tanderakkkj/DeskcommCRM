@@ -924,6 +924,40 @@ if [ -f "$PARTIAL_FILE" ]; then
   c_dim "$(t "  (o token do Supabase é de conta e nunca entra no rascunho: ele é perguntado de novo. Enter pula)")"
 fi
 
+# Resolver uma release publicada e conferir todas as imagens ANTES de criar
+# projeto Supabase, rede, .env ou schema. Uma tag Git pode existir antes do CI.
+PLATAFORMA_HOST="$(plataforma_oci_do_host "$(uname -m 2>/dev/null || true)")" \
+  || die "Arquitetura sem imagens publicadas."
+RELEASE_TAG="$(ultima_release_estavel)"
+VERSAO_ALVO="${RELEASE_TAG#v}"
+WAHA_EFETIVA="${WAHA_IMAGE:-$(imagem_waha_padrao_para_host)}"
+
+if [ "$PLATAFORMA_HOST" = linux/arm64 ]; then
+  if [ -z "$RELEASE_TAG" ] || ! preflight_instalacao "$VERSAO_ALVO" "$PLATAFORMA_HOST" "$WAHA_EFETIVA"; then
+    c_red "✖ Não há release numérica completa para ARM64, ou a WAHA escolhida não oferece ARM64."
+    c_red "  Confira registry, visibilidade das quatro imagens e WAHA_IMAGE; depois repita."
+    # O painel genérico sugeriria down -v/drop schema antes de qualquer efeito.
+    trap - EXIT
+    exit 1
+  fi
+elif [ -n "$RELEASE_TAG" ] && preflight_instalacao "$VERSAO_ALVO" "$PLATAFORMA_HOST" "$WAHA_EFETIVA"; then
+  : # Caminho normal AMD64: uma versão numérica nas quatro imagens.
+elif trio_publicado stable && manifesto_tem_plataforma "$WAHA_EFETIVA" "$PLATAFORMA_HOST"; then
+  c_ylw "⚠ A release ${VERSAO_ALVO:-mais recente} ainda não tem todas as imagens publicadas."
+  c_ylw "  AMD64 usará temporariamente stable; atualize quando a release estiver completa."
+  VERSAO_ALVO=stable
+elif [ -n "$RELEASE_TAG" ]; then
+  manifesto_tem_plataforma "$WAHA_EFETIVA" "$PLATAFORMA_HOST" \
+    || die "A WAHA configurada não oferece ${PLATAFORMA_HOST}; não alterei WAHA_IMAGE."
+  c_ylw "⚠ As imagens desta release não estão completas. Em AMD64, elas serão construídas neste servidor."
+else
+  manifesto_tem_plataforma "$WAHA_EFETIVA" "$PLATAFORMA_HOST" \
+    || die "A WAHA configurada não oferece ${PLATAFORMA_HOST}; não alterei WAHA_IMAGE."
+  VERSAO_ALVO=latest
+  c_ylw "⚠ Não consegui descobrir uma release publicada; AMD64 seguirá no canal latest."
+fi
+IMAGEM_APP_DEFAULT="${IMG_APP}:${VERSAO_ALVO}"
+
 # ── Proxy reverso: quem está com as portas 80 e 443? ────────────────────────
 # Fica AQUI, logo depois de ler o .env e ANTES de qualquer coisa cara: era a
 # última etapa da fase 2, então quem esbarrava neste problema já tinha criado um
@@ -1224,53 +1258,6 @@ if [ "$AI_PROVIDER" = "openai" ]; then
 else
   CAMPO_OPENAI_EXTRA="OPENAI_API_KEY|Chave da OpenAI — para ouvir áudios; a base de conhecimento aceita OpenRouter (Enter pula: dá para cadastrar depois pela tela, em IA › Credenciais)||v_openai|secret|opcional"
 fi
-
-# ── A versão que esta instalação vai rodar ───────────────────────────────────
-# Uma instalação nova nascia em `:latest`, e aqui `latest` NÃO quer dizer "a
-# última release": ele segue a branch default, então ela
-# segue o topo da `main` — código ainda não lançado. Quem instalava no dia 6
-# e quem instalava no dia 20 rodavam software diferente, ambos dizendo "estou
-# no latest", e o suporte não tinha como saber o quê. A issue #184 chegou
-# descrevendo o ambiente como "latest do dia 06/08/2026", que é a admissão de
-# que a versão não era nomeável.
-#
-# Resolvido no REMOTO porque o clone é `--depth 1` e não traz tag nenhuma.
-VERSAO_ALVO="$(ultima_versao_publicada "$REPO_URL")"
-
-# A tag do git é condição NECESSÁRIA, não suficiente: ela nasce minutos antes
-# das imagens, e `deskcomm-worker`/`deskcomm-scheduler` só passaram a existir
-# depois das releases que já estão publicadas — `deskcomm-worker:1.2.1` nunca
-# vai existir, porque a v1.2.1 é passado. Sem esta conferência, o .env do
-# cliente receberia duas referências impossíveis e o kit as construiria aqui em
-# silêncio, do topo da main: app de uma release + worker de outro código.
-#
-# Cascata, do mais específico ao mais disponível. Cada nível pergunta pelas TRÊS
-# imagens juntas, porque instalar com elas desalinhadas é o defeito, não a
-# solução.
-if [ -n "$VERSAO_ALVO" ] && trio_publicado "$VERSAO_ALVO"; then
-  : # o caminho normal: as três publicadas na última versão
-elif trio_publicado "stable"; then
-  c_ylw "$(t "⚠ A versão {1} ainda não tem as três imagens publicadas." "${VERSAO_ALVO:-$(t "mais recente")}")"
-  c_ylw "$(t "  Instalando pelo canal 'stable' (a última versão completa).")"
-  VERSAO_ALVO="stable"
-elif [ -n "$VERSAO_ALVO" ]; then
-  # Nem a versão nem o `stable` têm o trio. Segue assim mesmo — o compose tem
-  # `build:` ao lado do `image:` do worker e do scheduler, então eles são
-  # construídos aqui. É lento, mas instala. O que NÃO pode é isso acontecer
-  # calado: o dono precisa saber que duas peças dele saíram do fonte local.
-  c_ylw "$(t "⚠ As imagens do worker e do agendador ainda não estão publicadas.")"
-  c_ylw "$(t "  Elas serão construídas neste servidor — leva alguns minutos a mais.")"
-  c_ylw "$(t "  Rode 'bash hostgator-setup-kit/update.sh' quando a próxima versão sair.")"
-else
-  # Falha ABERTA: sem rede ou sem tag no remoto, segue como antes. Travar a
-  # instalação por não resolver um número seria trocar previsibilidade por
-  # disponibilidade — mas o aviso sai, porque o dono precisa saber que ficou
-  # num canal móvel em vez de numa versão.
-  VERSAO_ALVO="latest"
-  c_ylw "$(t "⚠ Não consegui descobrir a última versão publicada (rede?).")"
-  c_ylw "$(t "  Instalando pelo canal 'latest'. Depois rode: bash hostgator-setup-kit/update.sh")"
-fi
-IMAGEM_APP_DEFAULT="${IMG_APP}:${VERSAO_ALVO}"
 
 FIELDS=(
   "DOMAIN|Domínio do CRM (ex: crm.suaempresa.com.br)||v_domain||"

@@ -1385,6 +1385,23 @@ trio_publicado() {
   preflight_imagens_crm "$tag" "$plataforma"
 }
 
+# Instalação nova usa uma única versão numérica nas quatro imagens próprias e
+# confere a imagem WAHA efetiva, inclusive quando foi escolhida pelo operador.
+# Só consulta registry; não escreve .env, banco, Docker ou configuração.
+preflight_instalacao() { # <X.Y.Z> <linux/platform> <WAHA_IMAGE efetiva>
+  local versao="${1:-}" plataforma="${2:-}" waha="${3:-}"
+  if ! [[ "$versao" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    printf 'A instalação ARM64 exige versão numérica publicada (X.Y.Z): %s\n' "$versao" >&2
+    return 1
+  fi
+  [ -n "$waha" ] || { printf 'WAHA_IMAGE vazia\n' >&2; return 1; }
+  preflight_imagens_crm "$versao" "$plataforma" || return 1
+  if ! manifesto_tem_plataforma "$waha" "$plataforma"; then
+    printf 'WAHA_IMAGE %s não oferece %s; escolha uma imagem compatível, sem perder sessões/volumes.\n' "$waha" "$plataforma" >&2
+    return 1
+  fi
+}
+
 # O .env está com pin PELA METADE? (app fixado numa versão, worker/scheduler não)
 #
 # Este é o estado que a transição produz e que nada denuncia. Medido em ensaio e

@@ -10,35 +10,40 @@ plataforma_oci_do_host() { # <uname -m> -> linux/amd64 | linux/arm64
 }
 
 manifesto_tem_plataforma() { # <ref> <linux/platform>
-  local ref="${1:-}" plataforma="${2:-}" os arch bruto config
+  local ref="${1:-}" plataforma="${2:-}" bruto plataformas
   case "$plataforma" in
     linux/amd64|linux/arm64) ;;
     *) printf 'Plataforma OCI inválida: %s\n' "$plataforma" >&2; return 1 ;;
   esac
   [ -n "$ref" ] || { printf 'Referência de imagem vazia\n' >&2; return 1; }
-  os="${plataforma%%/*}"; arch="${plataforma#*/}"
   if ! bruto="$(docker buildx imagetools inspect --raw "$ref" 2>/dev/null)"; then
     printf 'Registro inacessível ou acesso negado para %s\n' "$ref" >&2
     return 1
   fi
-  if [ -z "$bruto" ] || ! jq -e 'type == "object" and (.schemaVersion == 2) and ((.manifests | type) == "array" or (.config | type) == "object")' >/dev/null 2>&1 <<<"$bruto"; then
+  # O Buildx já parseia o JSON do registry. A sonda bruta só distingue índice
+  # de manifesto simples; não exigimos jq numa VPS limpa. A plataforma vem do
+  # Go template do próprio Buildx, nunca de grep sobre os campos do JSON.
+  if [ -z "$bruto" ] || ! grep -Eq '"schemaVersion"[[:space:]]*:[[:space:]]*2' <<<"$bruto" \
+    || { ! grep -Fq '"manifests"' <<<"$bruto" && ! grep -Fq '"config"' <<<"$bruto"; }; then
     printf 'Manifesto OCI inválido ou vazio para %s\n' "$ref" >&2
     return 1
   fi
-  if jq -e '(.manifests | type) == "array"' >/dev/null 2>&1 <<<"$bruto"; then
-    if jq -e --arg os "$os" --arg arch "$arch" \
-      'any(.manifests[]; .platform.os == $os and .platform.architecture == $arch)' \
-      >/dev/null 2>&1 <<<"$bruto"; then return 0; fi
+  if grep -Fq '"manifests"' <<<"$bruto"; then
+    if ! plataformas="$(docker buildx imagetools inspect \
+      --format '{{range .Manifest.Manifests}}{{.Platform.OS}}/{{.Platform.Architecture}}{{println}}{{end}}' \
+      "$ref" 2>/dev/null)"; then
+      printf 'Registro inacessível ao consultar índice OCI de %s\n' "$ref" >&2
+      return 1
+    fi
   else
     # Um manifesto de imagem simples não declara plataforma; ela está no config.
     # Buildx resolve o config remoto e expõe os campos .Image.os/.architecture.
-    if ! config="$(docker buildx imagetools inspect --format '{{json .Image}}' "$ref" 2>/dev/null)"; then
+    if ! plataformas="$(docker buildx imagetools inspect --format '{{.Image.OS}}/{{.Image.Architecture}}' "$ref" 2>/dev/null)"; then
       printf 'Registro inacessível ao consultar config OCI de %s\n' "$ref" >&2
       return 1
     fi
-    if jq -e --arg os "$os" --arg arch "$arch" \
-      '.os == $os and .architecture == $arch' >/dev/null 2>&1 <<<"$config"; then return 0; fi
   fi
+  grep -Fxq "$plataforma" <<<"$plataformas" && return 0
   printf 'Imagem %s não oferece %s\n' "$ref" "$plataforma" >&2
   return 1
 }

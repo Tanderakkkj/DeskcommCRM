@@ -16,7 +16,11 @@ else
   printf '%s' "${MOCK_FORMAT:-}"
 fi
 SH
-chmod +x "$TMP/bin/docker"
+cat > "$TMP/bin/jq" <<'SH'
+#!/usr/bin/env bash
+exit 127
+SH
+chmod +x "$TMP/bin/docker" "$TMP/bin/jq"
 export PATH="$TMP/bin:$PATH"
 source "$ROOT/hostgator-setup-kit/_common.sh"
 
@@ -48,15 +52,15 @@ expect_ok 'host amd64' test "$(plataforma_oci_do_host x86_64)" = linux/amd64
 expect_ok 'host arm64' test "$(plataforma_oci_do_host aarch64)" = linux/arm64
 expect_fail 'unknown host' riscv64 plataforma_oci_do_host riscv64
 
-export MOCK_RAW="$both"
+export MOCK_RAW="$both" MOCK_FORMAT=$'linux/amd64\nlinux/arm64\nunknown/unknown'
 expect_ok 'index amd64' manifesto_tem_plataforma example/app:1 linux/amd64
 expect_ok 'index arm64' manifesto_tem_plataforma example/app:1 linux/arm64
-export MOCK_RAW="$amd"
+export MOCK_RAW="$amd" MOCK_FORMAT='linux/amd64'
 expect_fail 'amd-only image on ARM' linux/arm64 manifesto_tem_plataforma example/app:1 linux/arm64
-export MOCK_RAW="$arm"
+export MOCK_RAW="$arm" MOCK_FORMAT='linux/arm64'
 expect_fail 'arm-only image on AMD' linux/amd64 manifesto_tem_plataforma example/app:1 linux/amd64
 
-export MOCK_RAW="$single" MOCK_FORMAT='{"architecture":"arm64","os":"linux"}'
+export MOCK_RAW="$single" MOCK_FORMAT='linux/arm64'
 expect_ok 'single manifest ARM' manifesto_tem_plataforma example/app:1 linux/arm64
 expect_fail 'single manifest wrong arch' linux/amd64 manifesto_tem_plataforma example/app:1 linux/amd64
 
@@ -64,7 +68,7 @@ export MOCK_RAW='not-json'
 expect_fail 'malformed manifest' OCI manifesto_tem_plataforma example/app:1 linux/arm64
 export MOCK_RAW=''
 expect_fail 'empty manifest' OCI manifesto_tem_plataforma example/app:1 linux/arm64
-export MOCK_RAW="$both" MOCK_DOCKER_FAIL=1
+export MOCK_RAW="$both" MOCK_FORMAT=$'linux/amd64\nlinux/arm64' MOCK_DOCKER_FAIL=1
 expect_fail 'unreachable registry' inacessível manifesto_tem_plataforma example/app:1 linux/arm64
 unset MOCK_DOCKER_FAIL
 
