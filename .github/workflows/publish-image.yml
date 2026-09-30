@@ -543,6 +543,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Conferir imagens do Supabase pinado antes de promover stable
+        run: |
+          set -euo pipefail
+          source hostgator-setup-kit/_common.sh
+          source hostgator-setup-kit/_supabase-images.sh
+          preflight_supabase_da_ref "$SUPABASE_REF" linux/amd64
+          preflight_supabase_da_ref "$SUPABASE_REF" linux/arm64
+
       - name: Apontar `stable` para esta versão, em todas as imagens do conjunto
         env:
           VERSAO: ${{ github.ref_name }}
