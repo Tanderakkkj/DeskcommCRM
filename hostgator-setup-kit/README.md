@@ -154,7 +154,6 @@ declare `REVERSE_PROXY=traefik` no `.env` — aí a escolha é sua e ele segue s
 | `reset-mfa.sh` | Remove o MFA de um usuário travado |
 | `healthcheck.sh` | Diagnóstico dos serviços |
 | `preflight-upgrade.sh` | Sonda uma release numérica de um kit novo antes de usar o updater antigo |
-| `configurar-telefonia.sh` | Prepara SIP/ARI privados sem ativar o profile; `--ativar` é decisão separada |
 
 No ARM64, o instalador e o updater recusam antecipadamente uma release cujas quatro
 imagens do CRM ou a WAHA efetiva não tenham variante nativa. No single-server,

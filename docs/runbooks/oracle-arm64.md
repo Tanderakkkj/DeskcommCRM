@@ -81,7 +81,7 @@ bash hostgator-setup-kit/update.sh --to vX.Y.Z
 ```
 
 Se a sonda falhar, **não rode o updater antigo**. No kit novo, a atualização
-também sonda ARM64 antes de backup, checkout, cron ou banco. Não confunda a
+também sonda ARM64 antes de backup, checkout ou banco. Não confunda a
 branch local de segurança do código com backup dos dados. `backup.sh` salva
 banco/sessões WAHA e, no modo single-server, anexos; transfira as cópias para
 fora da VM e controle acesso. Para **ensaiar** restauração, use uma instalação
@@ -97,24 +97,9 @@ banco migrado pode não ser seguro; plano de retorno exige prova de restauraçã
 
 ## 4. Voz opcional
 
-O profile `voz` (WaCalls) e o profile `telefonia` (SIP/ARI) são opcionais e
-independentes do atendimento por texto. A sonda de imagem e o boot do
-voice-agent não comprovam chamada, áudio, webhook, custo nem qualidade.
-Quando houver IP e credenciais reais do trunk, configure-o **sem editar
-arquivos na VPS à mão**:
-
-```bash
-bash hostgator-setup-kit/configurar-telefonia.sh
-# só após conferir os arquivos, rede e provedor:
-bash hostgator-setup-kit/configurar-telefonia.sh --ativar
-```
-
-O primeiro comando pergunta IPv4, host/usuário/senha SIP, prepara
-`asterisk/pjsip.conf` e `asterisk/ari.conf` privados (0600), preserva credenciais
-ARI em `.env` e **não** habilita o profile. Configuração existente requer
-`SUBSTITUIR`; falha/interrupção recupera os arquivos anteriores. `--ativar`
-habilita o profile, mas não inicia contêineres. Provedores com requisitos
-PJSIP próprios exigem ajuste avançado e ensaio de registro, chamada e mídia.
+O profile `voz` (WaCalls) é opcional e independente do atendimento por texto.
+A sonda de imagem e o boot do voice-agent não comprovam chamada, áudio,
+webhook, custo nem qualidade.
 
 ## 5. Registro de aceite — não confundir manifesto com operação
 
@@ -128,7 +113,6 @@ sem incluir tokens, números completos ou dados de clientes nos registros.
 | Supabase/Auth/RLS | não executado | login e isolamento entre organizações de teste |
 | WhatsApp texto/mídia/restart | não executado | envio/recebimento, anexo e sessão persistente |
 | WaCalls | não executado | chamada real com áudio bidirecional e encerramento |
-| SIP | não executado | registro, chamada real, mídia e encerramento |
 | Backup/restore isolado | não executado | banco, WAHA e anexos restaurados em ambiente separado |
 | CPU/RAM/disco | não executado | `docker stats --no-stream`, `free -h`, `df -h` sob uso representativo |
 
