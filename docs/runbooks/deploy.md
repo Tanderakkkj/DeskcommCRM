@@ -76,8 +76,9 @@ commit → push → PR → merge na main → CI publica imagem → VPS puxa
 
 Para uma instalação nova em Oracle Ampere A1/Ubuntu (`linux/arm64`), siga
 [`oracle-arm64.md`](oracle-arm64.md). O workflow publica os índices AMD64/ARM64;
-o `install.sh` e o `update.sh` conferem a plataforma da release numérica e a
-WAHA efetiva **antes** dos efeitos persistentes. O modo single-server também
+numa VPS ARM64 o `install.sh` e o `update.sh` conferem a plataforma da release
+numérica e a WAHA efetiva **antes** dos efeitos persistentes (em AMD64 o caminho
+segue o de antes). O modo single-server também
 verifica cada imagem da ref fixada do Supabase. Push na branch ou atualização
 do GitHub **não atualiza a VPS automaticamente**: a atualização é explícita.
 
@@ -103,7 +104,8 @@ do CRM e a `WAHA_IMAGE` efetiva para a arquitetura da VPS sem alterar `.env`,
 volumes, contêineres ou banco. Uma WAHA personalizada/Plus incompatível precisa
 de uma imagem apropriada escolhida pelo operador; o kit não a substitui. Depois
 da primeira transição, o `update.sh` novo faz esse pré-voo antes de backup,
-checkout, cron e alterações no Supabase. O backup do updater continua necessário;
+checkout e da atualização do Supabase (o cron do agente e o modo de cadastro do
+GoTrue seguem antes da decisão de versão, como sempre). O backup do updater continua necessário;
 uma sonda verde não equivale a backup nem garante rollback automático do banco.
 
 > **`latest` não é a última release.** Ele é publicado a partir da branch default, então
