@@ -25,8 +25,6 @@ build/
 # nunca comitar. Templates ficam em asterisk/*.conf.example.
 asterisk/pjsip.conf
 asterisk/ari.conf
-# Estágio recuperável do configurador VoIP: guarda cópias de .env e credenciais.
-.telefonia-config.*/
 
 # Testing & coverage
 coverage/

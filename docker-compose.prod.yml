@@ -326,10 +326,9 @@ services:
   # `up -d` ATIVA o profile; e `app`/`worker` não podem ganhar `depends_on`
   # nestes serviços (dependência de profile inativo derruba o CRM inteiro).
   #
-  # Para preparar: bash hostgator-setup-kit/configurar-telefonia.sh gera os
-  # arquivos privados e sincroniza ARI com .env, sem ligar o profile. Depois
-  # de conferir firewall/trunk, `--ativar` acrescenta `telefonia` a
-  # COMPOSE_PROFILES; ainda não sobe contêiner nenhum.
+  # Para ligar: copiar asterisk/pjsip.conf.example e asterisk/ari.conf.example
+  # para os nomes sem `.example` (com as credenciais do tronco e do ARI),
+  # pôr `telefonia` em COMPOSE_PROFILES e subir.
   #
   # ═══ POR QUE O ASTERISK É PINADO POR DIGEST ═══
   #
