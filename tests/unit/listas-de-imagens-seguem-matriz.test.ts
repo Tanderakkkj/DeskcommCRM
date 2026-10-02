@@ -43,6 +43,13 @@ function stringsDoArray(texto: string): string[] {
 }
 
 function imagensDoKit(): string[] {
+  const corpo = /trio_publicado\(\)\s*\{([\s\S]*?)\n\}/.exec(common)?.[1] ?? "";
+  const lista = /for\s+i\s+in\s+([^;]+);\s*do/.exec(corpo)?.[1] ?? "";
+  return palavrasDaLista(lista);
+}
+
+// O pré-voo ARM64 tem a sua própria lista (sonda o índice OCI, não só o HTTP 200).
+function imagensDoPreflightArm(): string[] {
   const corpo = /preflight_imagens_crm\(\)\s*\{([\s\S]*?)\n\}/.exec(manifestos)?.[1] ?? "";
   const lista = /for\s+img\s+in\s+([^;]+);\s*do/.exec(corpo)?.[1] ?? "";
   return palavrasDaLista(lista);
@@ -68,12 +75,13 @@ describe("listas de imagens Docker seguem a matriz de publicação", () => {
   });
 
   it("o kit confere exatamente todas as imagens publicadas", () => {
-    expect(common, "trio_publicado deve delegar ao preflight de plataforma").toMatch(
-      /trio_publicado\(\)\s*\{[\s\S]*?preflight_imagens_crm\s+"\$tag"\s+"\$plataforma"/,
-    );
     expect(
       imagensDoKit(),
-      "preflight_imagens_crm() divergiu da matriz: uma imagem pode ficar invisível para install/update",
+      "trio_publicado() divergiu da matriz: uma imagem pode ficar invisível para install/update",
+    ).toEqual(IMAGENS);
+    expect(
+      imagensDoPreflightArm(),
+      "preflight_imagens_crm() divergiu da matriz: o pré-voo ARM64 deixaria uma imagem sem sonda",
     ).toEqual(IMAGENS);
   });
 

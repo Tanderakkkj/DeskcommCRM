@@ -289,8 +289,11 @@ pg_container() {
 # o update.sh leva quem já instalou até ela (atualizar_supabase_single_server).
 # Sem `readonly`: o update.sh relê este arquivo depois do checkout.
 # Esta ref foi conferida em ARM64: todas as 11 imagens do compose oficial têm
-# manifesto linux/arm64. Antes de atualizar a ref, confira as imagens novamente;
-# o update automático também precisa continuar funcionando na VPS A1.
+# manifesto linux/arm64. Antes de atualizar a ref, confira as imagens novamente
+# com `preflight_supabase_da_ref <ref nova> linux/arm64` (e linux/amd64), de
+# _supabase-images.sh: a troca da ref reprova tests/shell/single-server-installer.test.sh,
+# que a fixa, e é ali que esta conferência é cobrada — não na promoção de
+# `stable`, onde uma falha de rede ou do upstream seguraria a release de todos.
 SUPABASE_REF="self-hosted/v0.8.1"
 
 dir_do_supabase() { printf '%s/.runtime/supabase' "${PROJECT_DIR:-$PWD}"; }
@@ -1380,9 +1383,11 @@ ghcr_status() {
 # tests/unit/listas-de-imagens-seguem-matriz.test.ts. Renomear a função
 # quebraria o leitor daquele teste sem ganhar nada: o que importa é a lista.
 trio_publicado() {
-  local tag="$1" plataforma
-  plataforma="$(plataforma_oci_do_host "$(uname -m 2>/dev/null || true)")" || return 1
-  preflight_imagens_crm "$tag" "$plataforma"
+  local tag="$1" i
+  for i in deskcommcrm deskcomm-worker deskcomm-scheduler deskcomm-voice-agent; do
+    [ "$(ghcr_status "$i" "$tag")" = "200" ] || return 1
+  done
+  return 0
 }
 
 # Instalação nova usa uma única versão numérica nas quatro imagens próprias e

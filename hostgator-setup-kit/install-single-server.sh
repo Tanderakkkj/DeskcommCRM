@@ -96,20 +96,23 @@ fi
 recusar_projeto_de_outra_arvore || die "Instalação interrompida para não derrubar o CRM que já está no ar nesta VPS."
 recusar_supabase_de_outra_arvore || die "Instalação interrompida para não derrubar o Supabase de outra instalação nesta VPS."
 
-# Os dois conjuntos são sondados ANTES de .runtime, rede, credenciais e setup.
-# Uma WAHA personalizada (inclusive Plus) vinda do .env existente é preservada
-# pela sonda, e o install.sh repetirá a mesma conferência antes de subir o CRM.
-if [[ -f "$ROOT_DIR/.env" ]]; then load_env "$ROOT_DIR/.env"; fi
-plataforma="$(plataforma_oci_do_host "$(uname -m 2>/dev/null || true)")" || die "Arquitetura sem imagens publicadas."
-step "Conferindo imagens publicadas do CRM, WAHA e Supabase para $plataforma"
-release_tag="$(ultima_release_estavel)"
-[[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-  || die "Não encontrei release numérica publicada; nenhuma parte do Supabase foi criada."
-waha_efetiva="${WAHA_IMAGE:-$(imagem_waha_padrao_para_host)}"
-preflight_instalacao "${release_tag#v}" "$plataforma" "$waha_efetiva" \
-  || die "Imagens do CRM ou WAHA incompletas para $plataforma; nenhuma parte do Supabase foi criada."
-preflight_supabase_da_ref "$SUPABASE_REF" "$plataforma" \
-  || die "Imagens do Supabase incompletas para $plataforma; nenhuma parte foi criada."
+# ARM64: os dois conjuntos são sondados ANTES de .runtime, rede, credenciais e
+# setup. Uma WAHA personalizada (inclusive Plus) vinda do .env existente é
+# preservada pela sonda, e o install.sh repetirá a mesma conferência antes de
+# subir o CRM. Em AMD64 segue como antes: a sonda exige `docker buildx`.
+plataforma="$(plataforma_oci_do_host "$(uname -m 2>/dev/null || true)" 2>/dev/null || true)"
+if [[ "$plataforma" = linux/arm64 ]]; then
+  if [[ -f "$ROOT_DIR/.env" ]]; then load_env "$ROOT_DIR/.env"; fi
+  step "Conferindo imagens publicadas do CRM, WAHA e Supabase para $plataforma"
+  release_tag="$(ultima_release_estavel)"
+  [[ "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+    || die "Não encontrei release numérica publicada; nenhuma parte do Supabase foi criada."
+  waha_efetiva="${WAHA_IMAGE:-$(imagem_waha_padrao_para_host)}"
+  preflight_instalacao "${release_tag#v}" "$plataforma" "$waha_efetiva" \
+    || die "Imagens do CRM ou WAHA incompletas para $plataforma; nenhuma parte do Supabase foi criada."
+  preflight_supabase_da_ref "$SUPABASE_REF" "$plataforma" \
+    || die "Imagens do Supabase incompletas para $plataforma; nenhuma parte foi criada."
+fi
 
 mkdir -p "$RUNTIME_DIR"
 chmod 700 "$RUNTIME_DIR"
