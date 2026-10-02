@@ -40,21 +40,27 @@ grep -q 'devlikeapro/waha:noweb-arm-2026.7.2 linux/arm64' "$TMP/probes"
 test "$WAHA_IMAGE" = devlikeapro/waha:latest-2026.7.2
 reject 'canal móvel não é update versionado' preflight_atualizacao stable linux/arm64
 
-# O updater deve decidir no-op/downgrade antes do preflight. Uma atualização
-# real recusada não pode tocar no Supabase, cron, backup, checkout ou banco.
+# O updater decide no-op/downgrade antes do preflight. Uma atualização real
+# recusada em ARM64 não pode ter feito backup, checkout ou tocado no banco. O
+# cron do agente e o GoTrue (signup/SMTP) ficam no passo 0, antes da decisão de
+# versão, de propósito: o "só convite" tem de chegar mesmo quando o update recusa.
 updater="$(<"$ROOT/hostgator-setup-kit/update.sh")"
-before="${updater%%if ! preflight_atualizacao *}"
-test "$before" != "$updater" || { echo '✗ update.sh não chama preflight_atualizacao'; exit 1; }
-after="${updater#*if ! preflight_atualizacao *}"
+before="${updater%%if \[ \"\$PLATAFORMA_HOST\" = linux/arm64 \] && ! preflight_atualizacao *}"
+test "$before" != "$updater" || { echo '✗ update.sh não chama preflight_atualizacao só no ARM64'; exit 1; }
+after="${updater#*! preflight_atualizacao *}"
 case "$before" in
   *'bash "$KIT_DIR/backup.sh"'*|*'git checkout --quiet'*|*'atualizar_supabase_single_server ||'*)
     echo '✗ atualização altera estado antes do preflight'; exit 1 ;;
 esac
-case "$after" in
-  *'manutencao_regular_sem_upgrade'*'bash "$KIT_DIR/backup.sh"'*'git checkout --quiet'*) : ;;
-  *) echo '✗ ordem de manutenção/backup/checkout incorreta'; exit 1 ;;
+case "$before" in
+  *'sincronizar_signup_mode_do_gotrue'*'setup_update_agent_cron'*'Procurando atualizações'*) : ;;
+  *) echo '✗ GoTrue/cron saíram do passo 0'; exit 1 ;;
 esac
-echo '✓ update real consulta plataformas antes de efeitos'
+case "$after" in
+  *'bash "$KIT_DIR/backup.sh"'*'git checkout --quiet'*) : ;;
+  *) echo '✗ ordem de backup/checkout incorreta'; exit 1 ;;
+esac
+echo '✓ update real em ARM64 consulta plataformas antes de efeitos'
 
 test -f "$ROOT/hostgator-setup-kit/preflight-upgrade.sh" || { echo '✗ falta bootstrap legado'; exit 1; }
 echo '✓ bootstrap legado presente'

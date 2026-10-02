@@ -78,8 +78,6 @@ cat > "$WORK/bin/docker" <<'STUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$DOCKER_LOG"
 case " $* " in
-  *" imagetools inspect --raw "*) printf '%s' '{"schemaVersion":2,"manifests":[{"platform":{"os":"linux","architecture":"amd64"}},{"platform":{"os":"linux","architecture":"arm64"}}]}'; exit 0 ;;
-  *" imagetools inspect --format "*) printf 'linux/amd64\nlinux/arm64\n'; exit 0 ;;
   # Healthcheck do update.sh: "docker compose ... exec -T app node -e ...".
   # O dublê responde o que o app RESPONDE DE VERDADE — capturado da instalação
   # em produção. Antes aqui vinha {"status":"ok"}, um formato que /api/v1/health
@@ -145,10 +143,6 @@ STUB
 # como a prova lê o desfecho reportado.
 cat > "$WORK/bin/curl" <<'STUB'
 #!/usr/bin/env bash
-case "$*" in
-  *ghcr.io/token*) printf '%s' '{"token":"teste"}'; exit 0 ;;
-  *ghcr.io/v2/*) printf '%s' "${GHCR_STATUS:-200}"; exit 0 ;;
-esac
 payload=""
 while [ $# -gt 0 ]; do
   [ "$1" = "-d" ] && { shift; payload="$1"; }
@@ -262,21 +256,17 @@ echo "── 2. Sem --to, a última tag publicada também é recusada se já est
 run_update
 check "aborta com status != 0" test "$RC" -ne 0
 check "não chegou a rodar o backup" test ! -f "$BACKUP_MARK"
-check "a recusa não agendou cron antes de validar o alvo" test ! -f "$FAKE_CRONTAB"
-
-echo "── 2b. Registro indisponível recusa uma atualização real sem efeitos"
-HEAD_ANTES="$(git rev-parse HEAD)"
-: > "$DOCKER_LOG"
-GHCR_STATUS=403 run_update --to v0.9.0 --force
-check "preflight rejeita pacote privado/indisponível" test "$RC" -ne 0
-check "não chamou o backup" test ! -f "$BACKUP_MARK"
-check "não trocou o código" test "$(git rev-parse HEAD)" = "$HEAD_ANTES"
-check "não agendou cron" test ! -f "$FAKE_CRONTAB"
-check "não recriou contêiner" bash -c "! grep -q ' up ' '$DOCKER_LOG'"
+check "mesmo recusando, deixou o agente da tela instalado (com cd no diretório do projeto)" \
+  grep -q "cd ${PROJ} && bash hostgator-setup-kit/agent.sh" "$FAKE_CRONTAB"
 
 echo "── 3. --force é a saída explícita de quem quer mesmo voltar"
+: > "$DOCKER_LOG"
 run_update --to v0.9.0 --force
 check "passou da guarda e rodou o backup" test -f "$BACKUP_MARK"
+# O pré-voo OCI é só do ARM64: ele exige `docker buildx`, que uma VPS x86_64
+# pode não ter, e lá recusaria toda atualização. Este dublê de docker não
+# responde a `imagetools` — se o AMD64 voltar a sondar, a linha aparece aqui.
+check "em AMD64 a atualização não consulta o buildx" bash -c "! grep -q 'imagetools' '$DOCKER_LOG'"
 
 echo "── 4. Atualização de verdade grava a imagem no .env, sem duplicar a chave"
 # Estado de quem sofreu um rollback antes: o agente deixou a imagem apontando
