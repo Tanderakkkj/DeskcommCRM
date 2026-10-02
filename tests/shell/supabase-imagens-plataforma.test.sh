@@ -126,9 +126,11 @@ test ! -e "$TMP/instalador/.env" || { echo '✗ criou credenciais antes da recus
 grep -q 'Imagens do Supabase incompletas' "$TMP/instalador-out" || { echo '✗ recusa não explicou Supabase'; exit 1; }
 echo '✓ instalador recusa em árvore limpa sem criar estado'
 
+# A ref do Supabase é conferida quando ela MUDA (a pinagem exata está em
+# single-server-installer.test.sh), nunca na promoção de `stable`: ali uma falha
+# de rede ou uma imagem upstream sem arm64 seguraria a release de todos.
 workflow="$(<"$ROOT/.github/workflows/publish-image.yml")"
 case "$workflow" in
-  *'preflight_supabase_da_ref "$SUPABASE_REF" linux/amd64'*'preflight_supabase_da_ref "$SUPABASE_REF" linux/arm64'*)
-    echo '✓ release confere a ref Supabase nas duas arquiteturas' ;;
-  *) echo '✗ release não confere a ref Supabase'; exit 1 ;;
+  *'preflight_supabase_da_ref'*) echo '✗ a release depende da sonda de rede do Supabase'; exit 1 ;;
+  *) echo '✓ a promoção de stable não depende da sonda do Supabase' ;;
 esac

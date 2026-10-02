@@ -104,9 +104,10 @@ OCI — no mínimo `source`, `revision`, `version`, `licenses` — e é constru�
 - **Verificação:** o job **`imagens-ok`** de `publish-image.yml` reprova quando qualquer uma
   das quatro imagens não constrói. Ele existe porque a matriz gera um nome de check por imagem;
   exigir nomes individuais deixaria uma imagem nova escapar do gate em silêncio. A promoção
-  de `stable` também exige o índice AMD64 e ARM64 das quatro imagens, boot do voice-agent
-  em runner nativo e os manifestos da ref fixada do Supabase single-server. Um manifesto
-  prova distribuição, não chamada real.
+  de `stable` também exige o índice AMD64 e ARM64 das quatro imagens, e o PR sobe o
+  voice-agent em runner nativo. A ref fixada do Supabase single-server é conferida quando
+  ela muda (`preflight_supabase_da_ref`), não na promoção: uma falha de rede ou do upstream
+  ali seguraria a release de todos. Um manifesto prova distribuição, não chamada real.
 
   > **Ativado.** `imagens-ok` **é** required check da `main`. Medido em 2026-08-14:
   >
