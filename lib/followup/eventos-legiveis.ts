@@ -416,6 +416,15 @@ export function descreveEvento(
         ...motor,
       };
     }
+    case "turn_discarded":
+      // A suspensão da conta tirou o turno da fila antes de ele rodar
+      // (migration 0501). Sem esta linha o dossiê mostrava um código cru logo
+      // antes de um segundo "Pediu ao agente para escrever a mensagem".
+      return {
+        titulo: "O envio deste passo foi descartado porque a conta foi suspensa",
+        detalhe: "sai num envio novo quando a conta for reativada",
+        ...motor,
+      };
     case "held_by_return": {
       // Como o adiamento pela janela: segurar NÃO é falhar. Sem esta linha o
       // operador veria o fluxo parado por dias sem saber que ele está esperando

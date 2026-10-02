@@ -16,6 +16,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { empresaExigeMfa, exigeCadastroDeMfa } from "@/lib/auth/politica-mfa";
 import { normalizarIdioma } from "@/lib/i18n/idiomas";
+import { STATUS_OPERANTE, ehOperante } from "@/lib/organizacao/operante";
 import type { AuthUser, Role, UserOrgMembership, ActiveOrg } from "./types";
 
 const ACTIVE_ORG_COOKIE = "active_org";
@@ -43,6 +44,8 @@ interface OrgJoin {
   timezone: string | null;
   currency: string | null;
   country: string | null;
+  status?: string;
+  suspended_kind?: string | null;
 }
 
 /** O mesmo `organizations`, alcançado por outro embed: só as portas da EMPRESA. */
@@ -79,10 +82,14 @@ function escolherMembroAtivo(
 ): UserOrgMembership | null {
   if (memberships.length === 0) return null;
   if (cookieOrg) {
+    // Com cookie, MANTÉM mesmo a suspensa: é por ela que a pessoa chega ao hub
+    // `/account-suspended` para pagar, pedir LGPD ou trocar de empresa.
     const achado = memberships.find((o) => o.organization_id === cookieOrg);
     if (achado) return achado;
   }
-  return memberships[0] ?? null;
+  // Sem cookie, a primeira OPERANTE na mesma ordem (`accepted_at`,
+  // `organization_id`); a primeira de todas só quando nenhuma opera.
+  return memberships.find((o) => ehOperante(o.org_status)) ?? memberships[0] ?? null;
 }
 
 /**
@@ -175,7 +182,7 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
     await Promise.all([
       supabase
         .from("platform_admins")
-        .select("user_id, revoked_at")
+        .select("user_id, scope, revoked_at")
         .eq("user_id", user.id)
         .is("revoked_at", null)
         .maybeSingle(),
@@ -189,7 +196,7 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
           // issue #1341 acabou de engordar), e o alias traz só as portas da EMPRESA.
           // `timezone` veio do main (fuso da organização nas listas, #1290) e convive
           // com o alias: um embed por relação, sem renomear o que já existia.
-          "organization_id, role, interface_settings, accepted_at, organizations(display_name, locale, timezone, currency, country), interface_da_empresa:organizations(interface_settings)",
+          "organization_id, role, interface_settings, accepted_at, organizations(display_name, locale, timezone, currency, country, status, suspended_kind), interface_da_empresa:organizations(interface_settings)",
         )
         .eq("user_id", user.id)
         .is("revoked_at", null)
@@ -247,6 +254,8 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
       timezone: org?.timezone ?? null,
       currency: org?.currency ?? null,
       country: org?.country ?? null,
+      org_status: org?.status ?? null,
+      suspended_kind: org?.suspended_kind ?? null,
     };
   });
 
@@ -272,6 +281,7 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
     full_name: fullName,
     avatar_url: avatarUrl,
     is_platform_admin: !!paRow,
+    platform_admin_scope: paRow?.scope ?? null,
     locale,
     idioma,
     timezone,
@@ -281,11 +291,17 @@ export const loadAuthUser = cache(async (): Promise<AuthUser | null> => {
 });
 
 /**
- * Resolves the active organization for the current request.
- * Priority: cookie `active_org` (if member of) → first membership.
- * Returns null if user has zero memberships.
+ * A organização ativa SEM o portão de suspensão — o corpo que `resolveActiveOrg`
+ * tinha até a spec da cobrança (§4, item 3).
+ *
+ * Só para quem PRECISA enxergar a org parada: `requireRole` (responde 403
+ * `org_suspended` em JSON, não 307), o hub `/account-suspended`, leitura que não
+ * pode sumir para o suspenso (`lib/legal/operador.ts`) e o início de um
+ * acompanhamento, que só guarda para onde voltar (`admin/tenants/[id]/impersonate`).
+ * Rota de API usa `orgAtivaDaApi` (lib/auth/require-role.ts: 403 JSON); o resto,
+ * `resolveActiveOrg`.
  */
-export const resolveActiveOrg = cache(async (authUser: AuthUser): Promise<ActiveOrg | null> => {
+export const orgAtivaSemPortao = cache(async (authUser: AuthUser): Promise<ActiveOrg | null> => {
   if (authUser.support) {
     if (authUser.support.status !== "active") redirect("/support-ended");
     // Acompanhamento não tem membership, e era por isso que este caminho
@@ -307,6 +323,10 @@ export const resolveActiveOrg = cache(async (authUser: AuthUser): Promise<Active
       timezone: orgDoSuporte?.timezone ?? null,
       currency: orgDoSuporte?.currency ?? null,
       country: orgDoSuporte?.country ?? null,
+      // `fn_support_context` só devolve status 'active' com a org em 'active'
+      // (`o.status <> 'active'` vira 'revoked'), e a linha acima já saiu.
+      org_status: STATUS_OPERANTE,
+      suspended_kind: null,
     };
   }
   const store = await cookies();
@@ -320,7 +340,25 @@ export const resolveActiveOrg = cache(async (authUser: AuthUser): Promise<Active
     timezone: ativo.timezone ?? null,
     currency: ativo.currency ?? null,
     country: ativo.country ?? null,
+    org_status: ativo.org_status ?? null,
+    suspended_kind: ativo.suspended_kind ?? null,
   };
+});
+
+/**
+ * Resolves the active organization for the current request.
+ * Priority: cookie `active_org` (if member of) → first OPERANT membership → first.
+ * Returns null if user has zero memberships.
+ *
+ * Org NÃO operante redireciona para `/account-suspended` (mesmo precedente do
+ * `/support-ended`). É isto que fecha páginas, layouts e server actions de uma vez.
+ * NUNCA em rota de API (`app/api/**`): o `fetch` seguiria o 307 para HTML — lá
+ * é `orgAtivaDaApi` (cerca `tests/unit/api-nao-redireciona-org-suspensa.test.ts`).
+ */
+export const resolveActiveOrg = cache(async (authUser: AuthUser): Promise<ActiveOrg | null> => {
+  const org = await orgAtivaSemPortao(authUser);
+  if (org && !ehOperante(org.org_status)) redirect("/account-suspended");
+  return org;
 });
 
 /**

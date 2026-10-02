@@ -129,6 +129,7 @@ export const DICIONARIO: Traducoes = {
   "Envio pausado": { es: "Envío en pausa" },
   "A conta está conectada, mas o envio está desligado na aba Configuração.": { es: "La cuenta está conectada, pero el envío está desactivado en la pestaña Configuración." },
   "A conta está conectada e o envio está ligado.": { es: "La cuenta está conectada y el envío está activado." },
+  "A conta desta empresa está suspensa.": { es: "La cuenta de esta empresa está suspendida." },
   "Conversões chegando ao Google": { es: "Conversiones llegando a Google" },
   "Nenhuma conversão aceita ainda": { es: "Ninguna conversión aceptada todavía" },
   "Pode ser falta de negócios vindos de anúncio do Google, ou a captura do clique ainda não configurada no site.": { es: "Puede deberse a que no hay negocios que vengan de anuncios de Google o a que la captura del clic aún no está configurada en el sitio." },
@@ -1323,6 +1324,8 @@ export const DICIONARIO: Traducoes = {
   "Sem pedidos.": { es: "Sin pedidos." },
   "Sem atividade.": { es: "Sin actividad." },
   "Nova tag…": { es: "Nueva etiqueta…" },
+  // lib/atendimento/proximo-passo-padrao.ts — o texto que o banco grava na demanda nova
+  "Responder à nova mensagem do cliente": { es: "Responder al nuevo mensaje del cliente" },
   "Sem próximo passo definido": { es: "Sin siguiente paso definido" },
   "Marcar próximo passo": { es: "Definir siguiente paso" },
   Lead: { es: "Lead" },
@@ -2462,6 +2465,26 @@ export const DICIONARIO: Traducoes = {
     es: "Si el caso se resuelve antes, el seguimiento se cancela solo.",
   },
   "Minutos de silêncio": { es: "Minutos de silencio" },
+  // ─── gatilho de silêncio — pausa de reentrada (lib/followup/pausa-de-reentrada.ts) ───
+  "Pausa antes de recomeçar (horas)": { es: "Pausa antes de volver a empezar (horas)" },
+  "Silêncio máximo, em minutos (opcional)": { es: "Silencio máximo, en minutos (opcional)" },
+  "Da última mensagem do cliente": { es: "Desde el último mensaje del cliente" },
+  "Do último envio deste fluxo": { es: "Desde el último envío de este flujo" },
+  "Contar a pausa a partir do último envio deste fluxo (e não da última mensagem do cliente)": {
+    es: "Contar la pausa desde el último envío de este flujo (y no desde el último mensaje del cliente)",
+  },
+  "no máximo 1× a cada": { es: "como máximo 1× cada" },
+  "Precisa ser maior que o mínimo e no máximo 10080 (7 dias).": {
+    es: "Tiene que ser mayor que el mínimo y como máximo 10080 (7 días).",
+  },
+  "Com um máximo, o fluxo só começa enquanto o silêncio for recente — por exemplo, entre 10 e 60 minutos depois da última mensagem do cliente. Quem está calado há mais tempo fica de fora. 0 = sem máximo.": {
+    es: "Con un máximo, el flujo solo empieza mientras el silencio sea reciente — por ejemplo, entre 10 y 60 minutos después del último mensaje del cliente. Quien lleva más tiempo callado queda afuera. 0 = sin máximo.",
+  },
+  "Use de 0 a 2160 horas (90 dias).": { es: "Usa de 0 a 2160 horas (90 días)." },
+  "pausa de": { es: "pausa de" },
+  "Vale para quem já passou por este fluxo e respondeu ou chegou ao fim: ele só recomeça depois deste tempo sem o cliente escrever. Quem nunca passou por ele entra no tempo de silêncio de sempre. 0 = sem pausa.": {
+    es: "Vale para quien ya pasó por este flujo y respondió o llegó al final: solo vuelve a empezar después de este tiempo sin que el cliente escriba. Quien nunca pasó por él entra en el tiempo de silencio de siempre. 0 = sin pausa.",
+  },
   "Mínimo de": { es: "Mínimo de" },
   "minutos.": { es: "minutos." },
   "Segmentos (tags, opcional)": { es: "Segmentos (tags, opcional)" },
@@ -4576,8 +4599,8 @@ export const DICIONARIO: Traducoes = {
   "Mínimo 10 caracteres": { es: "Mínimo 10 caracteres" },
   "Máximo 500 caracteres": { es: "Máximo 500 caracteres" },
   "Razão inválida": { es: "Motivo inválido" },
-  "A suspensão bloqueará o acesso dos usuários deste tenant à plataforma. Esta ação pode ser revertida.": {
-    es: "La suspensión bloqueará el acceso de los usuarios de este tenant a la plataforma. Esta acción se puede revertir.",
+  "A empresa perde o acesso, e a IA, os envios e as automações dela param. Mensagens na fila e tarefas agendadas são descartadas e não saem ao reativar; os follow-ups em andamento retomam de onde pararam. As mensagens que chegarem continuam gravadas.": {
+    es: "La empresa pierde el acceso, y su IA, sus envíos y sus automatizaciones se detienen. Los mensajes en cola y las tareas programadas se descartan y no salen al reactivar; los seguimientos en curso se reanudan donde se detuvieron. Los mensajes que lleguen siguen guardándose.",
   },
   "Motivo da suspensão": { es: "Motivo de la suspensión" },
   "Descreva o motivo da suspensão (mínimo 10 caracteres)...": {
@@ -5153,6 +5176,39 @@ export const DICIONARIO: Traducoes = {
   "Últimos recebimentos": { es: "Últimos recibidos" },
   "Ainda não chegou nada por aqui.": { es: "Todavía no ha llegado nada por aquí." },
   "assinatura inválida": { es: "firma inválida" },
+  // Assinatura HMAC da fonte de captação, na tela de detalhe da fonte.
+  "Assinatura (HMAC)": { es: "Firma (HMAC)" },
+  "Com assinatura ativa, teste a partir do sistema que envia os dados.": {
+    es: "Con la firma activa, prueba desde el sistema que envía los datos.",
+  },
+  // O NOME do cabeçalho não entra na frase: ele é contrato de fio e sai da
+  // constante de lib/webhooks/assinatura.ts, renderizada ao lado deste texto.
+  "Sem assinatura, quem descobrir o endereço consegue criar leads. Com ela, quem envia assina o corpo cru da requisição com HMAC-SHA256 e manda o resultado em hexadecimal — hex puro, sem prefixo — neste cabeçalho:":
+    {
+      es: "Sin firma, quien descubra la dirección puede crear leads. Con ella, quien envía firma el cuerpo crudo de la solicitud con HMAC-SHA256 y manda el resultado en hexadecimal — hex puro, sin prefijo — en esta cabecera:",
+    },
+  "<HMAC-SHA256 do corpo, em hex, com o seu segredo>": {
+    es: "<HMAC-SHA256 del cuerpo, en hex, con tu secreto>",
+  },
+  "Gerar segredo": { es: "Generar secreto" },
+  "Trocar segredo": { es: "Cambiar secreto" },
+  "Remover segredo": { es: "Quitar secreto" },
+  // "Segredo copiado." já existe mais abaixo (tronco SIP) — chave repetida é
+  // erro de compilação, e o texto é o mesmo nos dois lugares.
+  "Guarde agora. Ele não será mostrado de novo.": {
+    es: "Guárdalo ahora. No se mostrará de nuevo.",
+  },
+  "Assinatura ligada.": { es: "Firma activada." },
+  "Segredo trocado.": { es: "Secreto cambiado." },
+  "Assinatura removida.": { es: "Firma quitada." },
+  "Trocar o segredo desta fonte?": { es: "¿Cambiar el secreto de esta fuente?" },
+  "Integrações que usam o segredo atual vão parar de funcionar até serem atualizadas.": {
+    es: "Las integraciones que usan el secreto actual dejarán de funcionar hasta que se actualicen.",
+  },
+  "Remover a assinatura desta fonte?": { es: "¿Quitar la firma de esta fuente?" },
+  "O endereço volta a aceitar envios sem assinatura — só o endereço secreto passa a protegê-lo.": {
+    es: "La dirección vuelve a aceptar envíos sin firma — solo la dirección secreta pasa a protegerla.",
+  },
   "Fonte ativa": { es: "Fuente activa" },
   "Pausada, ela para de aceitar novos envios.": { es: "Pausada, deja de aceptar nuevos envíos." },
   "Fonte ativada.": { es: "Fuente activada." },
@@ -7571,6 +7627,10 @@ export const DICIONARIO: Traducoes = {
   "Esperando a resposta do cliente": { es: "Esperando la respuesta del cliente" },
   "O cliente não respondeu dentro do prazo": { es: "El cliente no respondió dentro del plazo" },
   "Conferiu se a mensagem já tinha saído": { es: "Verificó si el mensaje ya había salido" },
+  "O envio deste passo foi descartado porque a conta foi suspensa": {
+    es: "El envío de este paso se descartó porque la cuenta fue suspendida",
+  },
+  "sai num envio novo quando a conta for reativada": { es: "sale en un envío nuevo cuando se reactive la cuenta" },
   "Mensagem enviada": { es: "Mensaje enviado" },
   "Segurou o fluxo por causa de um retorno agendado": {
     es: "Frenó el flujo por un regreso programado",
@@ -7861,6 +7921,12 @@ export const DICIONARIO: Traducoes = {
   "para mais informações.": { es: "para más información." },
   "Sua conta está suspensa. Fale com quem administra este sistema para saber o motivo e como reativá-la.": {
     es: "Tu cuenta está suspendida. Habla con quien administra este sistema para saber el motivo y cómo reactivarla.",
+  },
+  "Sua conta está suspensa. Avise o administrador da sua empresa.": {
+    es: "Tu cuenta está suspendida. Avisa a quien administra tu empresa.",
+  },
+  "Os pedidos de LGPD dos seus clientes continuam com prazo durante a suspensão.": {
+    es: "Las solicitudes LGPD de tus clientes siguen con plazo durante la suspensión.",
   },
 
   "Como esta instalação do": { es: "Cómo esta instalación de" },
@@ -9533,6 +9599,9 @@ export const DICIONARIO: Traducoes = {
   "Para ligar o Jev, cole a chave dele em Credenciais e espere o teste da chave passar.": {
     es: "Para activar Jev, pega su clave en Credenciales y espera a que pase la prueba de la clave.",
   },
+  "Se a sua empresa é da área da saúde: as mensagens que o Jev lê podem conter dado de saúde, que a LGPD trata como sensível. Antes de ligar, confira com quem cuida da LGPD da empresa se o contrato da TypeSafe cobre esse tipo de dado.": {
+    es: "Si tu empresa es del área de la salud: los mensajes que lee Jev pueden contener datos de salud, que la LGPD trata como sensibles. Antes de activarlo, consulta con quien se encarga de la LGPD en la empresa si el contrato de TypeSafe cubre ese tipo de dato.",
+  },
   "Não consegui checar o pedido de atualização.": { es: "No pude verificar la solicitud de actualización." },
   "Não consegui finalizar a atualização.": { es: "No pude finalizar la actualización." },
   "Não consegui gravar o estado.": { es: "No pude guardar el estado." },
@@ -10194,6 +10263,14 @@ export const DICIONARIO: Traducoes = {
     es: "Devuelve la llamada cuando puedas: nadie atendió a quien llamó.",
   },
   "Ligar de volta": { es: "Devolver la llamada" },
+  "A conta foi reativada — há conversas para revisar": {
+    es: "La cuenta fue reactivada — hay conversaciones para revisar",
+  },
+  "A IA não respondeu nem vai responder sozinha às conversas que chegaram durante a suspensão. Abra o Inbox e procure-as nas abas Fila e Automático.":
+    {
+      es: "La IA no respondió ni responderá sola a las conversaciones que llegaron durante la suspensión. Abre el Inbox y búscalas en las pestañas Cola y Automático.",
+    },
+  "Abrir o Inbox": { es: "Abrir el Inbox" },
   // Diálogo de exclusão de canal (`frasesDoImpacto`): singular e plural.
   "chamada de voz": { es: "llamada de voz" },
   "chamadas de voz": { es: "llamadas de voz" },
@@ -11552,6 +11629,21 @@ export const DICIONARIO: Traducoes = {
   "Erro ao suspender tenant": { es: "Error al suspender el tenant" },
   "Tenant reativado com sucesso": { es: "Tenant reactivado correctamente" },
   "Erro ao reativar tenant": { es: "Error al reactivar el tenant" },
+  "Nada mudou": { es: "Nada cambió" },
+  "Seu acesso à administração da plataforma é somente leitura.": {
+    es: "Su acceso a la administración de la plataforma es de solo lectura.",
+  },
+  "Confirme a verificação em duas etapas nesta sessão.": {
+    es: "Confirme la verificación en dos pasos en esta sesión.",
+  },
+  "Esta empresa já estava suspensa.": { es: "Esta empresa ya estaba suspendida." },
+  "Esta empresa foi encerrada ou anonimizada e já não opera.": {
+    es: "Esta empresa fue cerrada o anonimizada y ya no opera.",
+  },
+  "Esta empresa não estava suspensa.": { es: "Esta empresa no estaba suspendida." },
+  "Esta suspensão é por falta de pagamento. Use Dar prazo ou Tornar isenta.": {
+    es: "Esta suspensión es por falta de pago. Use Dar plazo o Eximir.",
+  },
   "Incidente resolvido com sucesso": { es: "Incidente resuelto correctamente" },
   "Erro ao resolver incidente": { es: "Error al resolver el incidente" },
   "Redes sociais": { es: "Redes sociales" },
@@ -12132,6 +12224,8 @@ export const DICIONARIO: Traducoes = {
     { es: "Hiciste demasiadas preguntas seguidas. Inténtalo de nuevo en un minuto." },
   "As perguntas dos colegas aparecem aqui em alguns segundos.":
     { es: "Las preguntas de tus colegas aparecen aquí en unos segundos." },
+  "Trechos do acervo ligados à pergunta.":
+    { es: "Fragmentos del acervo relacionados con la pregunta." },
   // lib/escalacao/passagem.ts (migration 0291) — por que a conversa saiu do
   // automático, e por que o cliente não foi avisado. A frase existe para a
   // TELA: `requested_human` é vocabulário de constraint, não texto para uma
@@ -13673,6 +13767,20 @@ export const DICIONARIO: Traducoes = {
   "Não dá para ver daqui": { es: "No se puede ver desde aquí" },
   "Ajustar": { es: "Ajustar" },
   "Tudo o que se liga e desliga, se está ligado e onde se ajusta.": { es: "Todo lo que se activa y desactiva, si está activado y dónde se ajusta." },
+  // ─── Cadastrar um campo do formulário a partir da captação ───
+  "Cadastrar como campo do lead": { es: "Registrar como campo del lead" },
+  "Texto longo": { es: "Texto largo" },
+  "Link": { es: "Enlace" },
+  "Sim/Não": { es: "Sí/No" },
+  "Não foi possível ler o funil desta fonte.": { es: "No se pudo leer el embudo de esta fuente." },
+  "Não foi possível cadastrar o campo. Só quem administra o funil pode fazer isso.": { es: "No se pudo registrar el campo. Solo quien administra el embudo puede hacerlo." },
+  "Campo cadastrado. Ele já aparece no card do lead e pode ser usado nas mensagens.": { es: "Campo registrado. Ya aparece en la tarjeta del lead y se puede usar en los mensajes." },
+  "Este nome de campo não pode ser cadastrado aqui. Cadastre em Configurações › Funis.": { es: "Este nombre de campo no se puede registrar aquí. Regístralo en Configuración › Embudos." },
+  "Esse campo já está cadastrado.": { es: "Ese campo ya está registrado." },
+  "O funil já tem o máximo de campos.": { es: "El embudo ya tiene el máximo de campos." },
+  "Dê um rótulo ao campo.": { es: "Ponle una etiqueta al campo." },
+  'Em "Ações após o envio", adicione "Webhook" e cole o endereço acima em "URL do Webhook".': { es: 'En "Acciones después del envío", agrega "Webhook" y pega la dirección de arriba en "URL del Webhook".' },
+  'Adicione a ação "Call Webhook" ao formulário e cole o endereço acima.': { es: 'Agrega la acción "Call Webhook" al formulario y pega la dirección de arriba.' },
 };
 
 /**

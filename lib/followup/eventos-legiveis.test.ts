@@ -10,7 +10,7 @@ import {
   type NoDoDossie,
 } from "./eventos-legiveis";
 import type { FlowNode } from "./graph-schema";
-import { EVENTO_ACAO_ADIADA, EVENTO_CLASSIFICACAO_ESPERANDO } from "./node-handlers";
+import { EVENTO_ACAO_ADIADA, EVENTO_CLASSIFICACAO_ESPERANDO, EVENTO_TURNO_DESCARTADO } from "./node-handlers";
 
 const espera: FlowNode = {
   id: "wait-1",
@@ -152,6 +152,16 @@ describe("descreveEvento", () => {
     expect(r.titulo).toBe("Segurou o envio até o horário permitido");
     expect(r.detalhe).toContain("envia em");
     expect(r.autor).toBe("motor");
+  });
+
+  it("o turno descartado pela suspensão diz o motivo e que o envio volta (migration 0501)", () => {
+    const r = descreveEvento(
+      evento({ node_id: "action-1", event_type: EVENTO_TURNO_DESCARTADO, payload: { motivo: "org_nao_operante" } }),
+      nos,
+      "pt-BR",
+    );
+    expect(r.titulo).toBe("O envio deste passo foi descartado porque a conta foi suspensa");
+    expect(r.detalhe).toBe("sai num envio novo quando a conta for reativada");
   });
 
   it("o classificar que espera a resposta diz que ESPERA, e até quando — não parece travado", () => {

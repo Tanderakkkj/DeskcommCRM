@@ -313,6 +313,7 @@ para reproduzir o teste local.
 | J6.2 | "Enviar lead de teste" | toast de sucesso + lead visível no Kanban + feed atualiza |
 | J6.3 | POST externo real (curl de "Zapier") | lead entra; feed mostra recebimento; idempotência por external_id |
 | J6.4 | HMAC: fonte com secret + assinatura errada | 401; feed marca inválido |
+| J6.17 | **`[P0]` Ligar a assinatura da fonte pela tela, e ela valer de verdade** | quem administra gera o segredo em Automações › Receber dados, vê o valor UMA vez e copia. Com o valor lido da própria tela: sem segredo → 200 (controle), com segredo e sem assinar → 401, assinatura de outro segredo → 401, assinado → 200. Reabrir mostra o estado e nenhum valor; remover devolve o 200 · `tests/e2e/fonte-de-captacao-assina-os-envios.spec.ts` (SPECS_PARTE_6) + `tests/unit/fonte-de-webhook-assinatura-hmac.test.tsx` (12 casos). Evidência: `evidence/assinatura-da-fonte-de-captacao/1-assinatura-desligada.png`, `evidence/assinatura-da-fonte-de-captacao/2-segredo-uma-vez.png`, `evidence/assinatura-da-fonte-de-captacao/3-reaberto-sem-valor.png`, `evidence/assinatura-da-fonte-de-captacao/4-assinatura-removida.png`. **Achado da própria execução:** o rig do e2e não gravava `nuvemshop_oauth_key` em `private.app_secrets` — a chave que o `install.sh` cria em toda VPS —, então "Gerar segredo" respondia 422 `encryption_unavailable` aqui e funcionaria no cliente. O rig media um produto que não existe; corrigido em `scripts/gerar-env-e2e.sh` |
 | J6.5 | Criar regra: lead com utm instagram → tag | regra nasce pausada; ativar pelo switch |
 | J6.6 | Drain roda → regra executa | tag aplicada; aba Atividade mostra run Sucesso |
 | J6.7 | Ação call_webhook → receiver local REAL | payload chega no receiver; envelope sem org_id/cpf |
@@ -325,6 +326,12 @@ para reproduzir o teste local.
 | J6.14 | **Formulário com campos que o mapeamento não reconhece** | a captação aparece como **Não entrou**, com o motivo em português e os campos crus — antes o site recebia 400 e não sobrava rastro nenhum na tela |
 | J6.15 | `viewer` tenta abrir o histórico | redirecionado; a RLS de `webhook_lead_captures` exige `manager` (o formulário é PII) |
 | J6.16 | Ação **"Mensagem escrita pela IA"** no ENTÃO | pede agente publicado + número + o contexto do que fazer com os dados; o agente sabe que é abordagem pós-formulário |
+| J6.17 | **Formulário do Elementor Pro** (ação "Webhook", `fields[id][value]`) | o lead ENTRA com nome, telefone e e-mail — antes o webhook respondia 400 "Nenhum campo mapeável" e nenhum lead nascia (achado de 2026-09-30, com envio real). **Unit verde** (`lib/webhooks/elementor.test.ts`, com sabotagem); **NÃO provado pela tela nem pela rota com banco** — sem Docker na sessão que escreveu |
+| J6.18 | **JetFormBuilder**, envio REAL (página publicada) | o lead entra sem `__refer`/`__form_id`/`__is_ajax` no card. **Medido em envio real** que name/phone/email já eram reconhecidos; o lixo interno só some com a mudança. Na PRÉVIA do editor o JetFormBuilder manda só os campos internos e a captação aparece "Não entrou" — é o comportamento dele, não defeito do CRM |
+| J6.19 | Painel da captação, campo **já cadastrado** no funil | a linha mostra o rótulo do funil, não a chave crua. Unit com RTL (`CapturaDetail.test.tsx`); **tela real NÃO executada** |
+| J6.20 | Painel da captação, campo **novo** → "Cadastrar como campo do lead" | grava o que já existia MAIS o campo, a partir da leitura fresca do funil; some o botão para nome que a API recusaria. Unit com RTL; **tela real NÃO executada** |
+| J6.21 | `{{servico}}` numa mensagem de automação | resolve o campo do lead; `{{nome}}` e o caminho longo seguem iguais. Unit (`template.test.ts`) |
+| J6.22 | Ação "Mensagem escrita pela IA" com campo cadastrado | a IA recebe "Serviço que precisa: …" em vez de `servico: …`. Unit com banco dublê (`dados-do-formulario.test.ts`) |
 
 ## J8 — O cliente não morre por falta de resposta `[P1]`
 
@@ -1288,6 +1295,44 @@ mesma busca que a IA usa; a pergunta vira linha em `knowledge_searches` com
 
 **Não coberto:** a busca com material indexado e chave de embedding real (nenhum
 e2e do CI tem chave); o gráfico "Consultas da equipe ao acervo" em tela.
+
+## J37 — Suspender uma empresa cala a IA e os envios dela `[P0]` (2026-09-29)
+
+**Origem:** PR 1 da cobrança do revendedor
+(`docs/superpowers/specs/2026-09-29-cobranca-do-revendedor-design.md`, §1.3, §4 e §9).
+Antes, suspender só tirava a pessoa da tela: a IA, o follow-up, as automações,
+o token de API e o MCP seguiam funcionando, e quem tinha acesso só de leitura ao
+painel suspendia e reativava empresas.
+
+| Caso | Spec | Estado |
+|---|---|---|
+| Quem só tem leitura clica em Suspender: a resposta é 403 `forbidden_scope`, a tela mostra o erro, e a empresa segue ativa | `tests/e2e/suspensao-administrativa.spec.ts` | CI (PARTE_6) |
+| O dono suspende pela tela; o turno agendado e a resposta na fila viram `failed`; o gate (pelo PostgREST real) passa a negar | idem | CI (PARTE_6) |
+| Status, fila e evento mudam numa transação só (`fn_suspender_organizacao`): dentro dela o evento já existe, e o rollback desfaz status, evento e o turno agendado juntos. A tela só confere o resultado depois | `tests/invariants/org-suspensa.test.ts` | test:db |
+| A admin da empresa suspensa cai no hub: pedido de LGPD abrindo no próprio hub; o clique em "Voltar para" a empresa que opera leva ao inbox dela | `tests/e2e/suspensao-administrativa.spec.ts` | CI (PARTE_6) |
+| `/app/inbox` volta para o hub; o token `dsk_` da empresa responde 403 `org_suspended` | idem | CI (PARTE_6) |
+| A captação por `webhooks/in/[token]` é gravada durante a suspensão; nenhuma `llm_calls` nem mensagem de saída nasce | idem | CI (PARTE_6) |
+| A atendente da empresa suspensa lê "Avise o administrador da sua empresa", sem LGPD; "Sair" encerra a sessão e `/app` manda ao login | idem | CI (PARTE_6) |
+| O dono reativa: nada sai em rajada, e a Central mostra o aviso que leva ao Inbox | idem | CI (PARTE_6) |
+| O aviso de reativação conta só conversa que não é de grupo, diz só o fato, e a orientação manda procurar nas abas Fila e Automático (numa empresa com IA a conversa sem dono está em Automático) | `tests/invariants/org-suspensa.test.ts`, `lib/ai/inbox-destino.ts` | test:db |
+| Hub: empresa que opera volta para `/app`, pedido inválido cai na lista, leitura que falha lança | `app/account-suspended/page.test.tsx` | unit |
+| O aviso de reativação leva ao Inbox só para quem atende, e nunca por referência | `lib/ai/inbox-destino.test.ts` | unit |
+| O agendador pula o follow-up da empresa parada, no Postgres real | `tests/invariants/cron-org-parada.test.ts` | test:db |
+| O lembrete da agenda não sai nem abre conversa para a empresa parada | `tests/unit/lembrete-pula-org-parada.test.ts` | unit |
+| Suspensão no meio do envio não pausa a prospecção nem tira o destinatário da campanha | `tests/unit/prospecting-worker.test.ts`, `tests/unit/suspensao-nao-dispara-campanha.test.ts` | unit |
+| Quem tem acesso só de leitura ao painel e é membro comum de uma empresa não apaga os dados dela | `tests/unit/zona-de-perigo-apaga-so-a-propria-org.test.ts` | unit |
+
+**Não coberto pela tela:** a suspensão por falta de pagamento e o painel de
+pagamento no hub (PR 3a); a IA calada com um agente publicado de verdade (a
+spec não publica agente — quem prova o veto é `lib/ai/elegibilidade/gate.test.ts`,
+`tests/invariants/org-suspensa.test.ts` e o controle do gate na própria spec);
+APROVAR um pedido de LGPD pelo hub (a spec abre o pedido, não aprova).
+
+**Evidência:** `evidence/suspensao-administrativa/leitura-recusada.png`,
+`evidence/suspensao-administrativa/hub-admin.png`,
+`evidence/suspensao-administrativa/hub-pedido-lgpd.png`,
+`evidence/suspensao-administrativa/hub-atendente.png`,
+`evidence/suspensao-administrativa/central-apos-reativar.png`.
 
 ## Jornadas exercitadas (instalação final, virgem)
 
@@ -3182,3 +3227,26 @@ respondeu; se a mensagem do fluxo saiu da janela do histórico (`historyLimit`),
 vale o horário, no segundo. Uma inbound sem texto acorda o nó, não é
 classificada, e a carência recomeça desse despertar (comportamento anterior do
 motor, não mexido aqui).
+
+## J39 — O fluxo de silêncio espera antes de recomeçar para quem já passou por ele `[P1]` (2026-09-27)
+
+Contexto do código: num fluxo de silêncio com `cancel_on_reply`, cada resposta do
+cliente cancelava a inscrição e a varredura seguinte o inscrevia de novo, do
+primeiro passo, depois do limiar (medido numa instalação real: uma oferta nova a
+cada "obrigado"; dois contatos em laço de ~95 reinscrições). O cooldown da
+varredura não segura esse caso: ele conta o limiar desde o fim da tentativa, e a
+resposta que encerra a inscrição é a mesma que começa o silêncio. A pausa
+(`trigger_config.params.reentry_pause_minutes`, regra em
+`lib/followup/pausa-de-reentrada.ts`) só vale se a TELA a grava e a preserva — o
+formulário do gatilho remonta os `params` a partir dos campos.
+
+Spec: `tests/e2e/pausa-de-reentrada.spec.ts`.
+
+| # | Caso | Expectativa | Resultado |
+|---|------|-------------|-----------|
+| J39.1 | Pôr 48 h no campo «Pausa antes de recomeçar (horas)» e salvar | o banco guarda `reentry_pause_minutes: 2880`; o botão diz «pausa de 48 h» | **PASS pela tela** — Evidência: `evidence/triagem-16set-l12/pausa-01-campo-preenchido.png`, `evidence/triagem-16set-l12/pausa-02-rotulo-com-pausa.png` |
+| J39.2 | Editar OUTRO campo do gatilho | a pausa sobrevive | **PASS pela tela** |
+| J39.3 | Zerar a pausa | a chave sai do gatilho (comportamento de antes) | **PASS pela tela** |
+| J39.4 | Quem encerrou uma inscrição há menos que a pausa / quem nunca passou / conversa com pessoa no comando / sem pausa (só o cooldown) | pula / entra / pula (salvo `handoff_policy='allow'`) / entra de novo no limiar | **PASS (invariante)** — `tests/invariants/followup-silence-sweep.test.ts` |
+| J39.5 | Teto do silêncio: 5 com mínimo 10 é recusado; 60 é gravado e o botão mostra «10–60 min»; na varredura, quem está calado há 20 min entra e há 3 h fica de fora | tela + invariante | **PASS pela tela** — Evidência: `evidence/triagem-16set-l12/silencio-01-teto-de-60.png`; invariante no mesmo arquivo de J39.4 |
+| J39.6 | Pausa de 24 h contada do último envio (a opção só aparece com pausa > 0) | o banco guarda `reentry_pause_basis: "ultimo_envio"`; o botão diz «no máximo 1× a cada 24 h»; desligar tira a chave; na varredura, quem encerrou há 25 h e escreveu há 20 min entra (pela base padrão, fica na pausa) | **PASS pela tela** — Evidência: `evidence/triagem-16set-l12/pausa-03-base-do-ultimo-envio.png`; invariante no mesmo arquivo de J39.4 |

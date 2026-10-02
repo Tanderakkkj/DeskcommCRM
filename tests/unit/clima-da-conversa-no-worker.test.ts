@@ -202,7 +202,7 @@ interface Cenario {
 
 function montarBanco(c: Cenario): Banco {
   return {
-    organizations: [{ id: ORG, settings: c.settings ?? {}, locale: "pt-BR" }],
+    organizations: [{ id: ORG, status: "active", settings: c.settings ?? {}, locale: "pt-BR" }],
     ai_provider_credentials: c.credenciais ?? [],
     ai_purpose_bindings: c.bindings ?? [],
     messages: [
@@ -984,6 +984,9 @@ function comAgenteNoAr(
       assigned_to_user_id: null,
       bot_silenced_until: null,
       last_handoff_at: null,
+      // O embed `organizations:organization_id(status)` que o portão de
+      // elegibilidade lê (spec cobrança §4): sem status, a régua falha fechada.
+      organizations: { status: "active" },
       ...over.conversa,
     },
   ];
@@ -1168,6 +1171,8 @@ describe("os pedidos do cliente no worker de clima", () => {
     // turno nesta conversa — a regra de hoje nem roda aqui.
     ["o único agente publicado em OUTRO número", { sessaoDoAgente: OUTRO_NUMERO }],
     ["conversa sem número", { conversa: { channel_session_id: null } }],
+    // A empresa suspensa: o portão veta o turno (`org_nao_operante`), então o Jev não pergunta.
+    ["empresa suspensa", { conversa: { organizations: { status: "suspended" } } }],
   ])("%s: o turno não rodaria, e os pedidos não são perguntados", async (_caso, over) => {
     fornecedor(respostaPorPergunta({ humano: 0.99 }));
     const cenario = jevLigado("decide");

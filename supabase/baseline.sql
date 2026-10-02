@@ -334,6 +334,16 @@ $$;
 
 
 ALTER FUNCTION "public"."fn_is_platform_admin"() OWNER TO "postgres";
+CREATE OR REPLACE FUNCTION "public"."fn_is_platform_admin_full"() RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'public'
+    AS $$
+  select exists (
+    select 1 from public.platform_admins
+    where user_id = auth.uid() and revoked_at is null and scope = 'full'
+  );
+$$;
+ALTER FUNCTION "public"."fn_is_platform_admin_full"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "public"."fn_lgpd_cascade_redact_contact"("p_organization_id" "uuid", "p_contact_id" "uuid", "p_request_id" "uuid") RETURNS "jsonb"
@@ -4033,8 +4043,9 @@ ALTER TABLE "public"."api_tokens" ENABLE ROW LEVEL SECURITY;
 
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
-                WHERE polname = 'api_tokens_admin_only' AND polrelid = '"public"."api_tokens"'::regclass) THEN
-CREATE POLICY "api_tokens_admin_only" ON "public"."api_tokens" USING (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin"())) WITH CHECK (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin"()));
+                WHERE polname = 'api_tokens_tenant_read' AND polrelid = '"public"."api_tokens"'::regclass) THEN
+CREATE POLICY "api_tokens_tenant_read" ON "public"."api_tokens" FOR SELECT USING (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin"()));
+CREATE POLICY "api_tokens_admin_write" ON "public"."api_tokens" FOR ALL USING (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin_full"())) WITH CHECK (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin_full"()));
 END IF; END $baseline_guard$;
 
 
@@ -4042,7 +4053,7 @@ END IF; END $baseline_guard$;
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
                 WHERE polname = 'audit_log_insert_tenant_member' AND polrelid = '"public"."api_audit_log"'::regclass) THEN
-CREATE POLICY "audit_log_insert_tenant_member" ON "public"."api_audit_log" FOR INSERT TO "authenticated" WITH CHECK ((("organization_id" IS NULL) OR ("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin"()));
+CREATE POLICY "audit_log_insert_tenant_member" ON "public"."api_audit_log" FOR INSERT TO "authenticated" WITH CHECK ((("organization_id" IS NULL) OR ("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin_full"()));
 END IF; END $baseline_guard$;
 
 
@@ -4121,7 +4132,7 @@ END IF; END $baseline_guard$;
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
                 WHERE polname = 'lgpd_requests_admin_write' AND polrelid = '"public"."lgpd_requests"'::regclass) THEN
-CREATE POLICY "lgpd_requests_admin_write" ON "public"."lgpd_requests" USING (("public"."fn_is_platform_admin"() OR (("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) AND "public"."fn_role_at_least"("organization_id", 'admin'::"text")))) WITH CHECK (("public"."fn_is_platform_admin"() OR (("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) AND "public"."fn_role_at_least"("organization_id", 'admin'::"text"))));
+CREATE POLICY "lgpd_requests_admin_write" ON "public"."lgpd_requests" USING (("public"."fn_is_platform_admin_full"() OR (("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) AND "public"."fn_role_at_least"("organization_id", 'admin'::"text")))) WITH CHECK (("public"."fn_is_platform_admin_full"() OR (("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) AND "public"."fn_role_at_least"("organization_id", 'admin'::"text"))));
 END IF; END $baseline_guard$;
 
 
@@ -4140,7 +4151,7 @@ END IF; END $baseline_guard$;
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
                 WHERE polname = 'merge_queue_manager_write' AND polrelid = '"public"."merge_queue"'::regclass) THEN
-CREATE POLICY "merge_queue_manager_write" ON "public"."merge_queue" USING (("public"."fn_is_platform_admin"() OR (("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) AND "public"."fn_role_at_least"("organization_id", 'manager'::"text")))) WITH CHECK (("public"."fn_is_platform_admin"() OR (("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) AND "public"."fn_role_at_least"("organization_id", 'manager'::"text"))));
+CREATE POLICY "merge_queue_manager_write" ON "public"."merge_queue" USING (("public"."fn_is_platform_admin_full"() OR (("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) AND "public"."fn_role_at_least"("organization_id", 'manager'::"text")))) WITH CHECK (("public"."fn_is_platform_admin_full"() OR (("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) AND "public"."fn_role_at_least"("organization_id", 'manager'::"text"))));
 END IF; END $baseline_guard$;
 
 
@@ -4153,8 +4164,9 @@ ALTER TABLE "public"."nuvemshop_products" ENABLE ROW LEVEL SECURITY;
 
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
-                WHERE polname = 'nuvemshop_products_tenant' AND polrelid = '"public"."nuvemshop_products"'::regclass) THEN
-CREATE POLICY "nuvemshop_products_tenant" ON "public"."nuvemshop_products" USING ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin"())) WITH CHECK ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin"()));
+                WHERE polname = 'nuvemshop_products_read' AND polrelid = '"public"."nuvemshop_products"'::regclass) THEN
+CREATE POLICY "nuvemshop_products_read" ON "public"."nuvemshop_products" FOR SELECT USING ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin"()));
+CREATE POLICY "nuvemshop_products_tenant_write" ON "public"."nuvemshop_products" FOR ALL USING ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin_full"())) WITH CHECK ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin_full"()));
 END IF; END $baseline_guard$;
 
 
@@ -4173,7 +4185,7 @@ END IF; END $baseline_guard$;
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
                 WHERE polname = 'orders_tenant_write' AND polrelid = '"public"."orders"'::regclass) THEN
-CREATE POLICY "orders_tenant_write" ON "public"."orders" USING ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin"())) WITH CHECK ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin"()));
+CREATE POLICY "orders_tenant_write" ON "public"."orders" USING ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin_full"())) WITH CHECK ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin_full"()));
 END IF; END $baseline_guard$;
 
 
@@ -4192,15 +4204,16 @@ END IF; END $baseline_guard$;
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
                 WHERE polname = 'orgs_write_platform_admin' AND polrelid = '"public"."organizations"'::regclass) THEN
-CREATE POLICY "orgs_write_platform_admin" ON "public"."organizations" USING ("public"."fn_is_platform_admin"()) WITH CHECK ("public"."fn_is_platform_admin"());
+CREATE POLICY "orgs_write_platform_admin" ON "public"."organizations" USING ("public"."fn_is_platform_admin_full"()) WITH CHECK ("public"."fn_is_platform_admin_full"());
 END IF; END $baseline_guard$;
 
 
 
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
-                WHERE polname = 'platform_admin_only_incidents' AND polrelid = '"public"."incidents"'::regclass) THEN
-CREATE POLICY "platform_admin_only_incidents" ON "public"."incidents" USING ("public"."fn_is_platform_admin"()) WITH CHECK ("public"."fn_is_platform_admin"());
+                WHERE polname = 'incidents_tenant_read' AND polrelid = '"public"."incidents"'::regclass) THEN
+CREATE POLICY "incidents_tenant_read" ON "public"."incidents" FOR SELECT USING ("public"."fn_is_platform_admin"());
+CREATE POLICY "incidents_admin_write" ON "public"."incidents" FOR ALL USING ("public"."fn_is_platform_admin_full"()) WITH CHECK ("public"."fn_is_platform_admin_full"());
 END IF; END $baseline_guard$;
 
 
@@ -4233,7 +4246,7 @@ ALTER TABLE "public"."tenant_integrations" ENABLE ROW LEVEL SECURITY;
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
                 WHERE polname = 'tenant_integrations_admin_write' AND polrelid = '"public"."tenant_integrations"'::regclass) THEN
-CREATE POLICY "tenant_integrations_admin_write" ON "public"."tenant_integrations" USING (("public"."fn_is_platform_admin"() OR (("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) AND "public"."fn_role_at_least"("organization_id", 'manager'::"text")))) WITH CHECK (("public"."fn_is_platform_admin"() OR (("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) AND "public"."fn_role_at_least"("organization_id", 'manager'::"text"))));
+CREATE POLICY "tenant_integrations_admin_write" ON "public"."tenant_integrations" USING (("public"."fn_is_platform_admin_full"() OR (("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) AND "public"."fn_role_at_least"("organization_id", 'manager'::"text")))) WITH CHECK (("public"."fn_is_platform_admin_full"() OR (("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) AND "public"."fn_role_at_least"("organization_id", 'manager'::"text"))));
 END IF; END $baseline_guard$;
 
 
@@ -4258,8 +4271,9 @@ END IF; END $baseline_guard$;
 
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
-                WHERE polname = 'tenant_isolation_ai_invocations_all' AND polrelid = '"public"."ai_invocations"'::regclass) THEN
-CREATE POLICY "tenant_isolation_ai_invocations_all" ON "public"."ai_invocations" USING ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin"())) WITH CHECK ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin"()));
+                WHERE polname = 'tenant_isolation_ai_invocations_read' AND polrelid = '"public"."ai_invocations"'::regclass) THEN
+CREATE POLICY "tenant_isolation_ai_invocations_read" ON "public"."ai_invocations" FOR SELECT USING ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin"()));
+CREATE POLICY "tenant_isolation_ai_invocations_write" ON "public"."ai_invocations" FOR ALL USING ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin_full"())) WITH CHECK ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin_full"()));
 END IF; END $baseline_guard$;
 
 
@@ -4275,8 +4289,9 @@ END IF; END $baseline_guard$;
 
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
-                WHERE polname = 'tenant_isolation_contacts_all' AND polrelid = '"public"."contacts"'::regclass) THEN
-CREATE POLICY "tenant_isolation_contacts_all" ON "public"."contacts" USING ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin"())) WITH CHECK ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin"()));
+                WHERE polname = 'tenant_isolation_contacts_read' AND polrelid = '"public"."contacts"'::regclass) THEN
+CREATE POLICY "tenant_isolation_contacts_read" ON "public"."contacts" FOR SELECT USING ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin"()));
+CREATE POLICY "tenant_isolation_contacts_write" ON "public"."contacts" FOR ALL USING ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin_full"())) WITH CHECK ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin_full"()));
 END IF; END $baseline_guard$;
 
 
@@ -4297,7 +4312,7 @@ ALTER TABLE "public"."user_organizations" ENABLE ROW LEVEL SECURITY;
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
                 WHERE polname = 'user_orgs_delete' AND polrelid = '"public"."user_organizations"'::regclass) THEN
-CREATE POLICY "user_orgs_delete" ON "public"."user_organizations" FOR DELETE USING (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin"()));
+CREATE POLICY "user_orgs_delete" ON "public"."user_organizations" FOR DELETE USING (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin_full"()));
 END IF; END $baseline_guard$;
 
 
@@ -4305,7 +4320,7 @@ END IF; END $baseline_guard$;
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
                 WHERE polname = 'user_orgs_insert' AND polrelid = '"public"."user_organizations"'::regclass) THEN
-CREATE POLICY "user_orgs_insert" ON "public"."user_organizations" FOR INSERT WITH CHECK (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin"()));
+CREATE POLICY "user_orgs_insert" ON "public"."user_organizations" FOR INSERT WITH CHECK (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin_full"()));
 END IF; END $baseline_guard$;
 
 
@@ -4321,7 +4336,7 @@ END IF; END $baseline_guard$;
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
                 WHERE polname = 'user_orgs_update' AND polrelid = '"public"."user_organizations"'::regclass) THEN
-CREATE POLICY "user_orgs_update" ON "public"."user_organizations" FOR UPDATE USING (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin"()));
+CREATE POLICY "user_orgs_update" ON "public"."user_organizations" FOR UPDATE USING (("public"."fn_role_at_least"("organization_id", 'admin'::"text") OR "public"."fn_is_platform_admin_full"()));
 END IF; END $baseline_guard$;
 
 
@@ -4331,8 +4346,9 @@ ALTER TABLE "public"."user_recovery_codes" ENABLE ROW LEVEL SECURITY;
 
 DO $baseline_guard$ BEGIN
 IF NOT EXISTS (SELECT 1 FROM pg_policy
-                WHERE polname = 'warmup_tenant_isolation_all' AND polrelid = '"public"."channel_session_warmup"'::regclass) THEN
-CREATE POLICY "warmup_tenant_isolation_all" ON "public"."channel_session_warmup" USING ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin"())) WITH CHECK ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin"()));
+                WHERE polname = 'warmup_tenant_isolation_read' AND polrelid = '"public"."channel_session_warmup"'::regclass) THEN
+CREATE POLICY "warmup_tenant_isolation_read" ON "public"."channel_session_warmup" FOR SELECT USING ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin"()));
+CREATE POLICY "warmup_tenant_isolation_write" ON "public"."channel_session_warmup" FOR ALL USING ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin_full"())) WITH CHECK ((("organization_id" IN ( SELECT "public"."fn_user_org_ids"() AS "fn_user_org_ids")) OR "public"."fn_is_platform_admin_full"()));
 END IF; END $baseline_guard$;
 
 
@@ -10117,6 +10133,10 @@ alter table public.agent_inbox_items
     -- sugerido (plano N1) ou falta preço de catálogo — a Central acompanha
     -- até as duas pendências sumirem, ou até a proposta ser enviada/descartada.
     'proposta_pronta_para_revisao',
+    -- (migration 0501) a organização voltou de uma suspensão e há conversas que
+    -- receberam mensagem enquanto ela estava parada: a IA não respondeu nem vai
+    -- responder sozinha. Um item por reativação, aberto por fn_reativar_organizacao.
+    'org_reativada',
     -- (migration 0500) O Jev percebeu, numa mensagem em que a regra de hoje não
     -- viu nada, um pedido para falar com uma pessoa ou para parar de receber
     -- mensagens, e a empresa escolheu "Avisar a equipe". Um kind por pedido, e
@@ -43008,6 +43028,455 @@ create policy followup_flow_versions_delete on public.followup_flow_versions
   using (organization_id in (select public.fn_user_org_ids())
          and public.fn_role_at_least(organization_id, 'manager'));
 
+-- ---- org operante e suspensão tipada (migration 0501) ----
+-- A suspensão que suspende (spec cobrança do revendedor §2.1, §3.1). Corpo e
+-- porquê: a migration 0501. Cópia byte a byte das seções A, B, C0a, C0, C, E, F e G dela; a
+-- seção D (kind 'org_reativada') entra NO LUGAR, no bloco único de
+-- agent_inbox_items_kind_check. Entra ANTES da VARREDURA anon porque cria função.
+
+-- ── A. suspended_kind + fn_org_operante ──────────────────────────────────────
+alter table public.organizations add column if not exists suspended_kind text;
+
+update public.organizations
+   set suspended_kind = 'administrativa'
+ where status = 'suspended'
+   and suspended_kind is null;
+
+alter table public.organizations
+  drop constraint if exists organizations_suspended_kind_check;
+alter table public.organizations
+  add constraint organizations_suspended_kind_check check (suspended_kind in ('administrativa', 'cobranca'));
+
+comment on column public.organizations.suspended_kind is
+  'Por que a organização está suspensa: administrativa (platform admin) ou cobranca (régua de cobrança). Só significa algo com status = suspended: o lgpd-redact-worker troca para redacted sem limpar. Escrito só por fn_suspender_organizacao e fn_reativar_organizacao (migration 0501).';
+
+create or replace function public.fn_org_operante(p_org uuid)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select coalesce((select o.status = 'active' from public.organizations o where o.id = p_org), false);
+$$;
+
+revoke execute on function public.fn_org_operante(uuid) from public, anon, authenticated;
+grant execute on function public.fn_org_operante(uuid) to service_role;
+
+-- ── B. o estado da organização só muda pelo servidor ─────────────────────────
+-- `orgs_write_platform_admin` aceita qualquer `fn_is_platform_admin()`, que
+-- ignora o scope, e `authenticated` tem GRANT ALL: sem isto um support_readonly
+-- reativaria uma suspensa, trocaria o tipo da suspensão, gravaria uma data de
+-- anonimização (`redacted_at`, escrita só pelo lgpd-redact-worker) ou criaria
+-- org isenta pelo PostgREST. Todo escritor legítimo é service_role ou função definer, onde
+-- `current_user` é o dono da função. Molde: `fn_meet_stamp`.
+create or replace function public.fn_organizacao_estado_so_pelo_servidor()
+returns trigger
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+begin
+  if current_user not in ('authenticated', 'anon') then
+    return new;
+  end if;
+  if tg_op = 'INSERT' then
+    raise exception 'organizacao_nasce_so_pelo_servidor'
+      using errcode = '42501',
+            detail = 'Organização nasce por rota de servidor (service_role ou função definer), nunca pela sessão.';
+  end if;
+  if new.status is distinct from old.status
+     or new.suspended_kind is distinct from old.suspended_kind
+     or new.suspended_at is distinct from old.suspended_at
+     or new.suspended_reason is distinct from old.suspended_reason
+     or new.suspended_by is distinct from old.suspended_by
+     or new.redacted_at is distinct from old.redacted_at
+     or new.created_by is distinct from old.created_by then
+    raise exception 'estado_da_organizacao_so_pelo_servidor'
+      using errcode = '42501',
+            detail = 'Status, suspensão, anonimização e autoria mudam só por fn_suspender_organizacao, fn_reativar_organizacao ou rota de servidor.';
+  end if;
+  return new;
+end;
+$$;
+
+revoke execute on function public.fn_organizacao_estado_so_pelo_servidor() from public, anon, authenticated;
+
+drop trigger if exists trg_organizacao_estado_so_pelo_servidor on public.organizations;
+create trigger trg_organizacao_estado_so_pelo_servidor
+  before insert or update on public.organizations
+  for each row execute function public.fn_organizacao_estado_so_pelo_servidor();
+
+-- ── C0a. o turno de envio que sai sem rodar ─────────────────────────────────
+-- O turno de envio de uma inscrição parada num nó `action` saiu sem ter rodado.
+-- O evento diz isso ao motor, que enfileira um turno novo quando a organização
+-- volta a operar (EVENTO_TURNO_DESCARTADO em lib/followup/node-handlers.ts).
+-- Sem ele, os rechecks da reativação esgotavam o dead-man e matavam a inscrição
+-- com `action_turn_never_completed` e um `followup_dead` de motivo falso. Duas
+-- origens, uma regra: a C0 (turno `pending` falhado pela suspensão) e o worker
+-- (turno que JÁ RODAVA na suspensão, com o envio barrado por
+-- `OrgNaoOperanteError` — a C0 não toca `running`). A chave não termina em
+-- `:<número>`: não conta como passo para fn_followup_job_current. Idempotente
+-- pela chave; devolve se gravou. Sem guarda de status da org: a reativação
+-- chama a C0 com a org já `active`.
+create or replace function public.fn_followup_turno_descartado(p_org uuid, p_job uuid)
+returns boolean
+language sql
+security invoker
+set search_path = ''
+as $$
+  with gravado as (
+    insert into public.followup_enrollment_events
+      (organization_id, enrollment_id, node_id, event_type, payload, idempotency_key)
+    select p_org, e.id, e.current_node_id, 'turn_discarded',
+           jsonb_build_object('job_id', j.id, 'motivo', 'org_nao_operante'),
+           coalesce(j.payload->>'source_step_key', j.id::text) || ':descartado'
+      from public.job_queue j
+      join public.followup_enrollments e
+        on e.organization_id = p_org
+       and e.id::text = j.payload->>'followup_enrollment_id'
+       and e.current_node_id = j.payload->>'node_id'
+       and e.status in ('active', 'waiting_reply', 'dormente')
+     where j.id = p_job
+       and j.organization_id = p_org
+       and j.kind = 'followup_turn'
+       and j.payload->>'purpose' = 'send_message'
+    on conflict (enrollment_id, idempotency_key) where idempotency_key is not null do nothing
+    returning 1
+  )
+  select exists (select 1 from gravado);
+$$;
+
+revoke execute on function public.fn_followup_turno_descartado(uuid, uuid) from public, anon, authenticated;
+grant execute on function public.fn_followup_turno_descartado(uuid, uuid) to service_role;
+
+-- ── C0. a fila que a organização parada descarta ────────────────────────────
+-- Falhar o job `pending` por fora não basta: o estado que dependia dele só é
+-- assentado pelo acerto normal (fn_reply_settle, fn_meet_delivery_settle), que
+-- nunca roda para um job que não saiu da fila. Sem isto, o rascunho aprovado
+-- ficava 'aguardando envio' e o link do Meet nunca saía, sem aviso. Precedente:
+-- fn_reply_redact, que falha job e rascunho juntos. Chamada pelas duas funções
+-- de estado; nenhum papel a executa direto.
+create or replace function public.fn_org_parada_descarta_fila(p_org uuid)
+returns void
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  v_entregas    uuid[];
+  v_turnos      uuid[];
+  v_compromisso uuid;
+begin
+  with falhados as (
+    update public.job_queue
+       set status = 'failed', last_error = 'org_nao_operante'
+     where organization_id = p_org and status = 'pending'
+    returning id, kind, payload
+  ),
+  rascunhos as (
+    update public.ai_reply_drafts d
+       set status = 'failed', error_code = 'org_suspensa', updated_at = now()
+      from falhados f
+     where d.organization_id = p_org and d.send_job_id = f.id
+       and f.kind = 'approved_reply' and d.status = 'approved'
+    returning d.id
+  )
+  select coalesce(array_agg(f.id) filter (where f.kind = 'transactional_delivery'), '{}'),
+         coalesce(array_agg(f.id) filter (where f.kind = 'followup_turn'), '{}')
+    into v_entregas, v_turnos
+    from falhados f;
+
+  -- O turno de envio que saiu da fila sem rodar avisa o motor (C0a).
+  perform public.fn_followup_turno_descartado(p_org, t.id) from unnest(v_turnos) as t(id);
+
+  for v_compromisso in
+    update public.calendar_appointments a
+       set meeting_delivery = a.meeting_delivery
+             || jsonb_build_object('state', 'failed', 'error', 'org_suspensa', 'settled_at', now())
+     where a.organization_id = p_org
+       and a.meeting_delivery_job_id = any(v_entregas)
+    returning a.id
+  loop
+    perform public.fn_meet_notice(p_org, v_compromisso, 'failed');
+  end loop;
+end;
+$$;
+
+revoke execute on function public.fn_org_parada_descarta_fila(uuid) from public, anon, authenticated, service_role;
+
+-- ── C. fn_suspender_organizacao: uma transação, fila parada ──────────────────
+-- Conserta a rota que lia, gravava e emitia o evento sem await em três passos.
+-- `failed` e não `dead` nos jobs: é o terminal de veto (queue.ts); `dead` abre
+-- aviso `job_dead`. A mensagem `queued` vira `failed` para o redrive não a
+-- mandar quando alguém olhar de novo. Suspensão com tipo NULO (imagem anterior
+-- à 0501, depois de rollback) vale como administrativa.
+create or replace function public.fn_suspender_organizacao(
+  p_org uuid, p_kind text, p_motivo text, p_ator uuid
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_status text;
+  v_kind   text;
+begin
+  if p_kind is null or p_kind not in ('administrativa', 'cobranca') then
+    raise exception 'tipo_de_suspensao_invalido' using errcode = '22023';
+  end if;
+
+  select o.status, coalesce(o.suspended_kind, 'administrativa')
+    into v_status, v_kind
+    from public.organizations o
+   where o.id = p_org
+     for update;
+  if not found then
+    raise exception 'organization_not_found' using errcode = 'P0002';
+  end if;
+
+  if v_status = 'suspended' then
+    if v_kind = p_kind then
+      return jsonb_build_object('changed', false, 'motivo', 'ja_suspensa');
+    end if;
+    if p_kind = 'cobranca' then
+      return jsonb_build_object('changed', false, 'motivo', 'administrativa_prevalece');
+    end if;
+    -- cobranca → administrativa: troca o tipo e mantém o início da suspensão.
+    update public.organizations
+       set suspended_kind = 'administrativa',
+           suspended_reason = p_motivo,
+           suspended_by = p_ator
+     where id = p_org;
+  elsif v_status = 'active' then
+    update public.organizations
+       set status = 'suspended',
+           suspended_kind = p_kind,
+           suspended_reason = p_motivo,
+           suspended_at = now(),
+           suspended_by = p_ator
+     where id = p_org;
+  else
+    -- redacted / archived: inalterados, já não operam.
+    return jsonb_build_object('changed', false, 'motivo', 'org_encerrada');
+  end if;
+
+  perform public.fn_org_parada_descarta_fila(p_org);
+
+  update public.messages
+     set status = 'failed', error_code = 'org_suspensa'
+   where organization_id = p_org and status = 'queued';
+
+  insert into public.event_log (organization_id, event_type, entity_kind, entity_id, payload)
+  values (p_org, 'tenant.suspended', 'organization', p_org,
+          jsonb_build_object('tenant_id', p_org, 'kind', p_kind,
+                             'suspended_by', p_ator, 'reason', p_motivo));
+
+  return jsonb_build_object('changed', true);
+end;
+$$;
+
+revoke execute on function public.fn_suspender_organizacao(uuid, text, text, uuid) from public, anon, authenticated;
+grant execute on function public.fn_suspender_organizacao(uuid, text, text, uuid) to service_role;
+
+-- ── E. fn_reativar_organizacao: volta sem rajada ─────────────────────────────
+-- Exige o tipo: `/reactivate` desfaz só a administrativa; a de cobrança sai por
+-- pagamento, prazo ou isenção (PR 2 em diante). Nada é reprocessado: jobs
+-- `pending` que sobraram viram `failed`, e as conversas que receberam mensagem
+-- durante a suspensão viram UM item na Central (sem referência) para uma
+-- pessoa revisar.
+create or replace function public.fn_reativar_organizacao(
+  p_org uuid, p_kind_exigido text, p_ator uuid
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_status    text;
+  v_kind      text;
+  v_desde     timestamptz;
+  v_conversas integer := 0;
+begin
+  if p_kind_exigido is null or p_kind_exigido not in ('administrativa', 'cobranca') then
+    raise exception 'tipo_de_suspensao_invalido' using errcode = '22023';
+  end if;
+
+  select o.status, coalesce(o.suspended_kind, 'administrativa'), o.suspended_at
+    into v_status, v_kind, v_desde
+    from public.organizations o
+   where o.id = p_org
+     for update;
+  if not found then
+    raise exception 'organization_not_found' using errcode = 'P0002';
+  end if;
+
+  if v_status <> 'suspended' then
+    return jsonb_build_object('changed', false, 'motivo', 'nao_suspensa');
+  end if;
+  if v_kind <> p_kind_exigido then
+    return jsonb_build_object('changed', false, 'motivo',
+      case v_kind when 'cobranca' then 'suspensao_de_cobranca' else 'suspensao_administrativa' end);
+  end if;
+
+  update public.organizations
+     set status = 'active',
+         suspended_kind = null,
+         suspended_at = null,
+         suspended_reason = null,
+         suspended_by = null
+   where id = p_org;
+
+  perform public.fn_org_parada_descarta_fila(p_org);
+
+  if v_desde is not null then
+    select count(*) into v_conversas
+      from public.conversations c
+     where c.organization_id = p_org
+       and not c.is_group
+       and c.last_inbound_at >= v_desde;
+  end if;
+
+  if v_conversas > 0 then
+    insert into public.agent_inbox_items (organization_id, kind, severity, title, body)
+    values (p_org, 'org_reativada', 'warn',
+            'A conta foi reativada — há conversas para revisar',
+            -- Só o fato: o que fazer é a orientação do aviso na tela
+            -- (lib/ai/inbox-destino.ts, org_reativada), que sabe das abas.
+            case when v_conversas = 1
+              then '1 conversa recebeu mensagem enquanto a conta estava suspensa.'
+              else format('%s conversas receberam mensagem enquanto a conta estava suspensa.', v_conversas)
+            end);
+  end if;
+
+  insert into public.event_log (organization_id, event_type, entity_kind, entity_id, payload)
+  values (p_org, 'tenant.reactivated', 'organization', p_org,
+          jsonb_build_object('tenant_id', p_org, 'kind', v_kind,
+                             'reactivated_by', p_ator, 'conversas_com_mensagem', v_conversas));
+
+  return jsonb_build_object('changed', true);
+end;
+$$;
+
+revoke execute on function public.fn_reativar_organizacao(uuid, text, uuid) from public, anon, authenticated;
+grant execute on function public.fn_reativar_organizacao(uuid, text, uuid) to service_role;
+
+-- ── F. o claim do follow-up não vê a organização parada ──────────────────────
+-- Sem isto o motor seguia avançando fluxos da org suspensa, enfileirava turnos e
+-- pagava o LLM de classificação. Definição VIGENTE da 0308 (espera longa dorme),
+-- copiada do baseline, com UMA mudança: a CTE `orgs` só aceita organização
+-- `active` (a régua de fn_org_operante, escrita como `exists` para o planner).
+-- A inscrição da org parada não é tocada — nem o lease —, e volta ao rodízio na
+-- reativação. Revoke e grant iguais aos da 0308.
+create or replace function fn_claim_due_followup_enrollments(p_limit int, p_lease_seconds int)
+returns setof followup_enrollments
+language sql
+security definer
+set search_path = public
+as $$
+  with orgs as (
+    -- Sem a condição de claim aqui de propósito: o lateral abaixo a aplica, e uma
+    -- organização cujos vencidos estão todos com lease apenas devolve zero linhas.
+    select distinct organization_id
+      from followup_enrollments
+     where status in ('active','waiting_reply','dormente')
+       and next_eval_at <= now()
+       -- Organização parada (suspensa, redigida, arquivada) não roda follow-up
+       -- (migration 0501).
+       and exists (select 1 from public.organizations o
+                    where o.id = followup_enrollments.organization_id
+                      and o.status = 'active')
+  ),
+  fila as (
+    select f.id, f.next_eval_at, f.posicao_na_org
+      from orgs
+      cross join lateral (
+        select d.id,
+               d.next_eval_at,
+               row_number() over (order by d.next_eval_at) as posicao_na_org
+          from followup_enrollments d
+         where d.organization_id = orgs.organization_id
+           and d.status in ('active','waiting_reply','dormente')
+           and d.next_eval_at <= now()
+           and (d.claimed_until is null or d.claimed_until < now())
+         order by d.next_eval_at
+         limit p_limit
+      ) f
+  ),
+  escolhidos as (
+    -- O rodízio: posição 1 de todas as organizações, depois a 2 de todas, etc.
+    -- Empate na mesma posição vai para quem esperou mais.
+    select id from fila order by posicao_na_org, next_eval_at limit p_limit
+  ),
+  travados as (
+    select e.id from followup_enrollments e
+     where e.id in (select id from escolhidos)
+     for update skip locked
+  )
+  update followup_enrollments e
+     set claimed_until = now() + make_interval(secs => p_lease_seconds),
+         updated_at = now()
+   where e.id in (select id from travados)
+     -- A condição de lease É REPETIDA AQUI, e não é redundante com a CTE `fila`.
+     -- Sem ela, duas conexões simultâneas reclamam as MESMAS linhas: a segunda
+     -- espera o lock da primeira, e quando ele sai o Postgres (READ COMMITTED)
+     -- reavalia só o WHERE do UPDATE — que não olhava `claimed_until` — e grava
+     -- por cima. O `skip locked` da CTE não salva: as duas materializam a mesma
+     -- lista antes de qualquer lock existir. Medido: interseção de 5 em 5 no
+     -- invariante de concorrência (followup-schema.test.ts).
+     and (e.claimed_until is null or e.claimed_until < now())
+  returning e.*;
+$$;
+
+revoke execute on function fn_claim_due_followup_enrollments(int, int) from public, anon, authenticated;
+grant execute on function fn_claim_due_followup_enrollments(int, int) to service_role;
+
+-- ── G. o evento turn_discarded é só do servidor ──────────────────────────────
+-- A C0 grava `turn_discarded` para o motor enfileirar um turno novo na
+-- reativação. A policy `followup_enrollment_events_insert` (0490) deixa
+-- `manager` inserir pela sessão, e a chave `…:descartado` não termina em
+-- `:<n>`: sem isto, um manager forjava o evento pelo PostgREST e o motor
+-- enfileirava um 2º turno de envio. Definição VIGENTE da 0488 com UMA mudança:
+-- o ramo da trilha também recusa `event_type = 'turn_discarded'` quando há
+-- `auth.uid()`. O servidor (service_role, funções de estado) não tem
+-- `auth.uid()` e segue gravando.
+create or replace function public.fn_followup_generation_write()
+returns trigger language plpgsql security definer set search_path=public as $$
+begin
+ -- #1862 — DELETE que chega em CASCATA não é escrita de follow-up. Este gatilho
+ -- é BEFORE ROW: o DELETE vindo de `on delete cascade` roda sob o gatilho da
+ -- chave estrangeira, com `pg_trigger_depth() > 1`. Passa QUALQUER cascata, não
+ -- só a da ficha: apagar o contato, a inscrição (followup_enrollments), o fluxo
+ -- (followup_flow_pointers) ou a organização leva junto os registros internos.
+ -- O turno que sobra sem inscrição/evento falha fechado em
+ -- fn_followup_job_current. A profundidade não distingue cascata de DELETE
+ -- feito por outro gatilho: hoje nenhum gatilho apaga nestas duas tabelas, e
+ -- quem criar um herda esta passagem. O DELETE DIRETO (profundidade 1, com
+ -- `auth.uid()`) continua caindo na recusa abaixo — a 42501 não afrouxa.
+ if tg_op='DELETE' and pg_trigger_depth()>1 then return old; end if;
+ if tg_table_name='job_queue' then
+  if auth.uid() is not null and ((tg_op<>'DELETE' and new.kind='followup_turn') or (tg_op<>'INSERT' and old.kind='followup_turn')) then
+   raise exception 'followup_job_internal' using errcode='42501';
+  end if;
+  if tg_op='UPDATE' and old.kind='followup_turn' then
+   if new.organization_id<>old.organization_id or new.contact_id is distinct from old.contact_id or new.kind<>old.kind
+    or new.payload->'followup_enrollment_id' is distinct from old.payload->'followup_enrollment_id'
+    or new.payload->'node_id' is distinct from old.payload->'node_id'
+    or new.payload->'source_step_key' is distinct from old.payload->'source_step_key'
+   then raise exception 'followup_job_origin_immutable' using errcode='42501'; end if;
+  end if;
+ elsif auth.uid() is not null and (
+   (tg_op<>'DELETE' and (new.idempotency_key ~ ':[0-9]+$' or new.event_type='turn_discarded'))
+   or (tg_op<>'INSERT' and (old.idempotency_key ~ ':[0-9]+$' or old.event_type='turn_discarded'))) then
+  raise exception 'followup_step_internal' using errcode='42501';
+ end if;
+ if tg_op='DELETE' then return old; end if;
+ return new;
+end; $$;
+
+revoke all on function public.fn_followup_generation_write() from public,anon,authenticated;
+
+
 -- ---- a cascata do BANCO alcança lead_notes, tool_calls, lead_state e social_identity (migration 0494) ----
 -- Follow-up do #1958 (issue #1964). A dorsa `fn_redigir_conversas_ao_anonimizar`
 -- (gatilho da virada de is_anonymized, desenho da 0391) passou a redigir também:
@@ -43874,6 +44343,46 @@ create trigger trg_fechar_aviso_do_jev_ao_bloquear
  execute function public.fn_fechar_aviso_do_jev_ao_bloquear();
 
 notify pgrst, 'reload schema';
+-- ---- a recusa permanente do atendimento não pede repetição (migration 0514) ----
+-- `PT409` no lugar de `40001` em `service_stale` de `fn_service_status` (a
+-- revisão esperada não bate: recusa PERMANENTE). `40001` vira HTTP 500 no
+-- PostgREST, e a requisição é reexecutada sem fim — no Supabase self-hosted a
+-- guarda da 0250 não alcança, porque o `sb-request-id` só é carimbado pela
+-- nuvem. `service_contact_changed` segue `40001` (conflito real: repetir passa).
+-- Corpo idêntico ao da definição acima, com um `errcode` trocado. Idempotente.
+
+create or replace function public.fn_service_status(p_org uuid,p_conversation uuid,p_status text,p_expected bigint default null)
+returns public.conversations language plpgsql security definer set search_path=public as $$
+declare c public.conversations; terminal boolean; pre_contact uuid;
+begin
+ if p_status not in ('closed','resolved','archived','open','pending','ai_handling','claimed') then
+  raise exception 'invalid_status' using errcode='22023'; end if;
+ select * into c from public.conversations where id=p_conversation and organization_id=p_org;
+ if not found then raise exception 'service_not_found' using errcode='P0002'; end if;
+ pre_contact:=c.contact_id;
+ perform public.fn_service_lock(p_org,c.contact_id);
+ select * into c from public.conversations where id=p_conversation and organization_id=p_org for no key update;
+ if c.contact_id is distinct from pre_contact then raise exception 'service_contact_changed' using errcode='40001'; end if;
+ if p_expected is not null and c.service_revision<>p_expected then raise exception 'service_stale' using errcode='PT409'; end if;
+ if c.status=p_status then return c; end if;
+ terminal := p_status in ('closed','resolved','archived');
+ update public.conversations set status=p_status,status_changed_at=clock_timestamp(),
+   service_revision=service_revision+case when terminal or c.status in ('closed','resolved','archived') then 1 else 0 end,
+   service_closed_at=case when terminal then clock_timestamp() else service_closed_at end,
+   service_started_at=case when c.status in ('closed','resolved','archived') and not terminal then clock_timestamp() else service_started_at end,
+   bot_silenced_until=case when terminal and last_handoff_at is null then null else bot_silenced_until end,
+   current_demanda_id=case when c.status in ('closed','resolved','archived') and not terminal then null else current_demanda_id end
+  where id=c.id and organization_id=p_org returning * into c;
+ if terminal then
+   update public.demandas set proximo_passo=coalesce(proximo_passo,'Revisar atendimento e registrar o desfecho da demanda')
+    where organization_id=p_org and id=c.current_demanda_id and fechada_em is null;
+ end if;
+ return c;
+end; $$;
+
+revoke execute on function public.fn_service_status(uuid,uuid,text,bigint) from public,anon,authenticated;
+grant execute on function public.fn_service_status(uuid,uuid,text,bigint) to service_role;
+
 -- ---- VARREDURA anon: função nova nasce exposta em quem ATUALIZA (migration 0116) ----
 --
 -- ⚠️ DE PROPÓSITO, NENHUMA FUNÇÃO É CRIADA DEPOIS DESTE BLOCO. Apêndice que cria
@@ -44662,6 +45171,90 @@ do $f$ begin perform public.fn_reaplicar_modulos_instalados(); end $f$;
 -- leem o privilégio de `authenticated` de cada tabela, então precisam ver a
 -- tabela já com RLS e isolamento.
 do $f$ begin perform public.fn_proteger_tabelas_de_organizacao(); end $f$;
+
+-- ---- fix(2000): platform admin `support_readonly` não escreve (migration 0508) ----
+-- `fn_is_platform_admin()` ignora o scope, então uma policy de ESCRITA montada com
+-- ela deixava um platform admin `support_readonly` alterar organizations/settings
+-- pelo PostgREST. O corpo já nasce com `fn_is_platform_admin_full()` (que exige
+-- `scope = 'full'`); este apêndice é o self-heal idempotente para bancos que já têm
+-- as policies na forma antiga. Leitura (`for select`) CONTINUA com `fn_is_platform_admin()`
+-- — support_readonly segue lendo, só não escreve mais.
+
+drop policy if exists "api_tokens_admin_only" on "public"."api_tokens";
+drop policy if exists "api_tokens_tenant_read" on "public"."api_tokens";
+create policy "api_tokens_tenant_read" on "public"."api_tokens" for select using (public.fn_role_at_least("organization_id",'admin') or public.fn_is_platform_admin());
+drop policy if exists "api_tokens_admin_write" on "public"."api_tokens";
+create policy "api_tokens_admin_write" on "public"."api_tokens" for all using (public.fn_role_at_least("organization_id",'admin') or public.fn_is_platform_admin_full()) with check (public.fn_role_at_least("organization_id",'admin') or public.fn_is_platform_admin_full());
+
+drop policy if exists "nuvemshop_products_tenant" on "public"."nuvemshop_products";
+drop policy if exists "nuvemshop_products_read" on "public"."nuvemshop_products";
+create policy "nuvemshop_products_read" on "public"."nuvemshop_products" for select using ("organization_id" in (select public.fn_user_org_ids()) or public.fn_is_platform_admin());
+drop policy if exists "nuvemshop_products_tenant_write" on "public"."nuvemshop_products";
+create policy "nuvemshop_products_tenant_write" on "public"."nuvemshop_products" for all using ("organization_id" in (select public.fn_user_org_ids()) or public.fn_is_platform_admin_full()) with check ("organization_id" in (select public.fn_user_org_ids()) or public.fn_is_platform_admin_full());
+
+drop policy if exists "platform_admin_only_incidents" on "public"."incidents";
+drop policy if exists "incidents_tenant_read" on "public"."incidents";
+create policy "incidents_tenant_read" on "public"."incidents" for select using (public.fn_is_platform_admin());
+drop policy if exists "incidents_admin_write" on "public"."incidents";
+create policy "incidents_admin_write" on "public"."incidents" for all using (public.fn_is_platform_admin_full()) with check (public.fn_is_platform_admin_full());
+
+drop policy if exists "tenant_isolation_ai_invocations_all" on "public"."ai_invocations";
+drop policy if exists "tenant_isolation_ai_invocations_read" on "public"."ai_invocations";
+create policy "tenant_isolation_ai_invocations_read" on "public"."ai_invocations" for select using ("organization_id" in (select public.fn_user_org_ids()) or public.fn_is_platform_admin());
+drop policy if exists "tenant_isolation_ai_invocations_write" on "public"."ai_invocations";
+create policy "tenant_isolation_ai_invocations_write" on "public"."ai_invocations" for all using ("organization_id" in (select public.fn_user_org_ids()) or public.fn_is_platform_admin_full()) with check ("organization_id" in (select public.fn_user_org_ids()) or public.fn_is_platform_admin_full());
+
+drop policy if exists "tenant_isolation_contacts_all" on "public"."contacts";
+drop policy if exists "tenant_isolation_contacts_read" on "public"."contacts";
+create policy "tenant_isolation_contacts_read" on "public"."contacts" for select using ("organization_id" in (select public.fn_user_org_ids()) or public.fn_is_platform_admin());
+drop policy if exists "tenant_isolation_contacts_write" on "public"."contacts";
+create policy "tenant_isolation_contacts_write" on "public"."contacts" for all using ("organization_id" in (select public.fn_user_org_ids()) or public.fn_is_platform_admin_full()) with check ("organization_id" in (select public.fn_user_org_ids()) or public.fn_is_platform_admin_full());
+
+drop policy if exists "warmup_tenant_isolation_all" on "public"."channel_session_warmup";
+drop policy if exists "warmup_tenant_isolation_read" on "public"."channel_session_warmup";
+create policy "warmup_tenant_isolation_read" on "public"."channel_session_warmup" for select using ("organization_id" in (select public.fn_user_org_ids()) or public.fn_is_platform_admin());
+drop policy if exists "warmup_tenant_isolation_write" on "public"."channel_session_warmup";
+create policy "warmup_tenant_isolation_write" on "public"."channel_session_warmup" for all using ("organization_id" in (select public.fn_user_org_ids()) or public.fn_is_platform_admin_full()) with check ("organization_id" in (select public.fn_user_org_ids()) or public.fn_is_platform_admin_full());
+
+drop policy if exists "orgs_write_platform_admin" on "public"."organizations";
+drop policy if exists "orgs_write_platform_admin" on "public"."organizations";
+create policy "orgs_write_platform_admin" on "public"."organizations" for all using (public.fn_is_platform_admin_full()) with check (public.fn_is_platform_admin_full());
+
+drop policy if exists "audit_log_insert_tenant_member" on "public"."api_audit_log";
+drop policy if exists "audit_log_insert_tenant_member" on "public"."api_audit_log";
+create policy "audit_log_insert_tenant_member" on "public"."api_audit_log" for insert to authenticated with check ((("organization_id" is null) or ("organization_id" in (select public.fn_user_org_ids())) or public.fn_is_platform_admin_full()));
+
+drop policy if exists "lgpd_requests_admin_write" on "public"."lgpd_requests";
+drop policy if exists "lgpd_requests_admin_write" on "public"."lgpd_requests";
+create policy "lgpd_requests_admin_write" on "public"."lgpd_requests" for all using (public.fn_is_platform_admin_full() or ("organization_id" in (select public.fn_user_org_ids()) and public.fn_role_at_least("organization_id",'admin'))) with check (public.fn_is_platform_admin_full() or ("organization_id" in (select public.fn_user_org_ids()) and public.fn_role_at_least("organization_id",'admin')));
+
+drop policy if exists "merge_queue_manager_write" on "public"."merge_queue";
+drop policy if exists "merge_queue_manager_write" on "public"."merge_queue";
+create policy "merge_queue_manager_write" on "public"."merge_queue" for all using (public.fn_is_platform_admin_full() or ("organization_id" in (select public.fn_user_org_ids()) and public.fn_role_at_least("organization_id",'manager'))) with check (public.fn_is_platform_admin_full() or ("organization_id" in (select public.fn_user_org_ids()) and public.fn_role_at_least("organization_id",'manager')));
+
+drop policy if exists "tenant_integrations_admin_write" on "public"."tenant_integrations";
+drop policy if exists "tenant_integrations_admin_write" on "public"."tenant_integrations";
+create policy "tenant_integrations_admin_write" on "public"."tenant_integrations" for all using (public.fn_is_platform_admin_full() or ("organization_id" in (select public.fn_user_org_ids()) and public.fn_role_at_least("organization_id",'manager'))) with check (public.fn_is_platform_admin_full() or ("organization_id" in (select public.fn_user_org_ids()) and public.fn_role_at_least("organization_id",'manager')));
+
+drop policy if exists "orders_tenant_write" on "public"."orders";
+drop policy if exists "orders_tenant_write" on "public"."orders";
+create policy "orders_tenant_write" on "public"."orders" for all using ("organization_id" in (select public.fn_user_org_ids()) or public.fn_is_platform_admin_full()) with check ("organization_id" in (select public.fn_user_org_ids()) or public.fn_is_platform_admin_full());
+
+drop policy if exists "user_orgs_delete" on "public"."user_organizations";
+drop policy if exists "user_orgs_delete" on "public"."user_organizations";
+create policy "user_orgs_delete" on "public"."user_organizations" for delete using (public.fn_role_at_least("organization_id",'admin') or public.fn_is_platform_admin_full());
+
+drop policy if exists "user_orgs_insert" on "public"."user_organizations";
+drop policy if exists "user_orgs_insert" on "public"."user_organizations";
+create policy "user_orgs_insert" on "public"."user_organizations" for insert with check (public.fn_role_at_least("organization_id",'admin') or public.fn_is_platform_admin_full());
+
+drop policy if exists "user_orgs_update" on "public"."user_organizations";
+drop policy if exists "user_orgs_update" on "public"."user_organizations";
+create policy "user_orgs_update" on "public"."user_organizations" for update using (public.fn_role_at_least("organization_id",'admin') or public.fn_is_platform_admin_full());
+
+-- ---- grants da função nova (espelha o bloco da fn_is_platform_admin) ----
+revoke execute on function public.fn_is_platform_admin_full() from public, anon;
+grant execute on function public.fn_is_platform_admin_full() to authenticated, service_role;
 
 -- ---- travas do modo somente leitura do suporte, depois de toda tabela (migration 0274) ----
 --

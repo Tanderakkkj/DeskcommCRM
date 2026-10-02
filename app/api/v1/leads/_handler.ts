@@ -747,9 +747,14 @@ export async function updateLeadHandler(
     // reason é RENDERIZADO NA TELA e vai junto em captura, exportação e ticket
     // de suporte; o §9 proíbe PII nova em log, reason ou evidence.
     //
-    // Quem precisa do valor anterior tem `api_audit_log`, que já registra a
-    // mutação SOB CONTROLE DE ACESSO. Duplicar aqui criaria um segundo lugar
-    // com o mesmo dado e menos proteção.
+    // O valor anterior NÃO é guardado em lugar nenhum — nem aqui, nem no
+    // `api_audit_log`, que registra `lead.updated` com só `{ fields }` (os
+    // NOMES dos campos, nunca o antes-e-depois). Pôr lá o valor do título ou
+    // de `custom_fields` também seria PII fora do alcance da proteção: o audit
+    // é append-only e a anonimização da LGPD (lib/lgpd/cascata.ts) não o
+    // alcança. Guardar o antes-e-depois só de campos tipados sem PII é
+    // pergunta aberta na #1755, sem decisão. Hoje, quem precisa do valor
+    // anterior não tem onde buscar.
     //
     // NÃO confunda com a atividade de autorização vencida (wave 4), que mostra
     // antes-e-depois DE PROPÓSITO: lá o texto é a proposta do PRÓPRIO AGENTE,

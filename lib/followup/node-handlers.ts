@@ -227,10 +227,30 @@ export function rechecksOciososDaAcao(events: EnrollmentEventRef[], nodeId: stri
   for (let i = events.length - 1; i >= 0; i--) {
     const evento = events[i]!;
     if (evento.node_id !== nodeId) break;
-    if (evento.event_type === EVENTO_ACAO_ADIADA) return n;
+    if (evento.event_type === EVENTO_ACAO_ADIADA || evento.event_type === EVENTO_TURNO_DESCARTADO) return n;
     n++;
   }
   return n;
+}
+
+/**
+ * O turno de envio desta estadia saiu da fila SEM rodar: a organização foi
+ * suspensa e `fn_org_parada_descarta_fila` (migration 0501) o falhou, gravando
+ * este evento. Não é defeito do worker, então não conta para o dead-man (ver
+ * `rechecksOciososDaAcao`), e o motor enfileira um turno novo na reativação —
+ * o claim não entrega a inscrição enquanto a org está parada.
+ */
+export const EVENTO_TURNO_DESCARTADO = "turn_discarded";
+
+/** O último turno desta estadia no `action` foi descartado e nenhum outro o substituiu. */
+export function turnoDaAcaoDescartado(events: EnrollmentEventRef[], nodeId: string): boolean {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const evento = events[i]!;
+    if (evento.node_id !== nodeId) return false;
+    if (evento.event_type === EVENTO_TURNO_DESCARTADO) return true;
+    if (evento.event_type === "turn_enqueued") return false;
+  }
+  return false;
 }
 
 /**

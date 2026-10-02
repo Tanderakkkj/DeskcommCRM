@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { requireRole } from "@/lib/auth/require-role";
+import { type NextRequest } from "next/server";
 import { requireSupportWrite } from "@/lib/impersonate/support";
+import { resolveAuthDual, tetoDeEscritaDoToken } from "@/lib/api/auth-dual";
 import { ok, fail } from "@/lib/api/wrappers";
 import { audit } from "@/lib/audit";
 import { getRequestPool } from "@/lib/agent-engine/db/request-pool";
@@ -21,6 +22,7 @@ import {
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 const headers = { "Cache-Control": "no-store" };
+const ACOES_ABERTAS_AO_TOKEN = new Set<string>(["configure", "search", "pause"]);
 function failure(error: unknown, requestId: string) {
   return fail(
     "prospecting_unavailable",
@@ -31,13 +33,18 @@ function failure(error: unknown, requestId: string) {
     { requestId, headers },
   );
 }
-export async function GET() {
+export async function GET(req: NextRequest) {
   const requestId = randomUUID();
-  const auth = await requireRole("admin", { requestId, resource: "prospecting" });
+  const auth = await resolveAuthDual(req, {
+    requestId,
+    resource: "prospecting",
+    role: "admin",
+    scope: "mcp:read",
+  });
   if (!auth.ok) return auth.response;
   try {
     const db = getRequestPool();
-    const org = auth.org.orgId;
+    const org = auth.organizationId;
     const [settings, campaigns, candidates, agents, channels, stages] = await Promise.all([
       db.query("select organization_id from prospecting_settings where organization_id=$1", [org]),
       db.query(
@@ -82,12 +89,20 @@ export async function GET() {
     return failure(error, requestId);
   }
 }
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   const support = await requireSupportWrite();
   if (support) return support;
   const requestId = randomUUID();
-  const auth = await requireRole("admin", { requestId, resource: "prospecting" });
+  const auth = await resolveAuthDual(req, {
+    requestId,
+    resource: "prospecting",
+    role: "admin",
+    scope: "mcp:write",
+  });
   if (!auth.ok) return auth.response;
+  const teto = await tetoDeEscritaDoToken(auth, "prospecting", requestId);
+  if (teto) return teto;
+
   const parsed = prospectingInputSchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success)
     return fail(
@@ -97,7 +112,18 @@ export async function POST(req: Request) {
       { requestId, headers },
     );
   const body = parsed.data;
-  const org = auth.org.orgId;
+  // Lista de PERMISSÃO, não de negação: iniciar e retomar campanha ENVIAM
+  // mensagem a quem nunca falou com a empresa, e a #1875 pede o envio sob
+  // controle humano. Ação nova da prospecção nasce fechada ao token até alguém
+  // decidir abri-la aqui.
+  if (auth.via === "token" && !ACOES_ABERTAS_AO_TOKEN.has(body.action))
+    return fail(
+      "forbidden",
+      "Por token, a prospecção só configura, pesquisa e pausa. Iniciar ou retomar campanha exige a tela: o envio fica sob controle de uma pessoa.",
+      403,
+      { requestId, headers },
+    );
+  const org = auth.organizationId;
   try {
     const pool = getRequestPool();
     const admin = createAdminClient();
@@ -148,7 +174,8 @@ export async function POST(req: Request) {
     await audit({
       action: "prospecting.changed",
       organizationId: org,
-      actorUserId: auth.user.id,
+      actorUserId: auth.actor.type === "user" ? auth.actor.id : null,
+      actorApiTokenId: auth.apiTokenId ?? null,
       resourceType: "prospecting",
       resourceId,
       metadata: { operation: body.action },

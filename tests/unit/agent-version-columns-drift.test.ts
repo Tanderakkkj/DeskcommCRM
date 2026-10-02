@@ -124,12 +124,14 @@ describe("versionCreateSchema aceita as flags por-agente que a tela edita", () =
 });
 
 /**
- * O SELECT e o schema iguais ainda não bastam: a server action da tela monta os
- * INSERTs de versão campo a campo. `inbound_debounce_ms` (#1856) entrou só no
- * PATCH de rascunho existente e ficou fora dos três INSERTs — salvar um agente
- * publicado, reverter pelo Histórico e criar pela tela gravavam NULL, e a janela
- * voltava calada para a env. Este bloco lê cada `.insert({ ... })` encadeado em
- * `.from("ai_agent_versions")` da action e cobra a coluna em todos.
+ * O SELECT e o schema iguais ainda não bastam: cada caminho que grava uma versão
+ * monta o INSERT campo a campo. `inbound_debounce_ms` (#1856) entrou só no PATCH
+ * de rascunho e ficou fora de três INSERTs; `followup` e `proposal_ai_draft_enabled`
+ * também já se perderam pela mesma fenda (#2004). Este bloco lê cada
+ * `.insert({ ... })` encadeado em `.from("ai_agent_versions")` de TODOS os caminhos
+ * que gravam versão e cobra TODAS as chaves de `versionShapeSchema` — a lista vem
+ * do próprio schema (tipada), então uma coluna nova no schema passa a ser cobrada
+ * aqui sem editar este arquivo.
  */
 function insertsDeVersao(source: string): string[] {
   const blocos: string[] = [];
@@ -146,20 +148,79 @@ function insertsDeVersao(source: string): string[] {
   return blocos;
 }
 
-describe("INSERTs de versão da tela levam a janela de rajada", () => {
-  it("o extrator acusa um INSERT sem a coluna (controle positivo)", () => {
-    const sem = 'admin.from("ai_agent_versions").insert({ split_max_chars: 1, followup: { a: 1 } })';
+/** Chaves de conteúdo de `versionShapeSchema` (as que a versão LEVA ao gravar). */
+function chavesDeConteudoDaVersao(): string[] {
+  return Object.keys(versionCreateSchema.shape);
+}
+
+/** Extrai os nomes de chave (`chave:` no início de linha, indentado) de um trecho.
+ *  Casar por nome de chave (e não por substring) evita que um comentário que cite
+ *  a palavra confunda a cerca. */
+function chavesNomeadas(bloco: string): string[] {
+  const nomes: string[] = [];
+  const re = /^\s+([a-z_][a-z0-9_]*):/gm;
+  for (let m = re.exec(bloco); m !== null; m = re.exec(bloco)) {
+    const nome = m[1];
+    if (nome !== undefined && !nomes.includes(nome)) nomes.push(nome);
+  }
+  return nomes;
+}
+
+/** Todo caminho que chama `.from("ai_agent_versions").insert(` precisa levar
+ *  todas as chaves de versão. O duplicate espalha `versionPayloadFrom` (helper
+ *  próprio) — aí a chave mora no corpo do helper, não no `insert`; o corpo do
+ *  helper é o alvo. */
+const FILES_WITH_VERSION_INSERTS = [
+  "app/app/ai/agents/[id]/_actions.ts",
+  "app/api/v1/ai/agents/[id]/versions/route.ts",
+  "lib/ai/agents/duplicate.ts",
+];
+
+/** Corpo do `versionPayloadFrom` (os campos que a versão duplicada leva). */
+function corpoDeVersionPayloadFrom(source: string): string {
+  const ini = source.indexOf("function versionPayloadFrom");
+  if (ini === -1) return "";
+  const chove = source.indexOf("return {", ini);
+  if (chove === -1) return "";
+  let nivel = 1;
+  let i = chove + "return {".length;
+  while (nivel > 0 && i < source.length) {
+    if (source[i] === "{") nivel++;
+    else if (source[i] === "}") nivel--;
+    i++;
+  }
+  return source.slice(chove, i);
+}
+
+describe("todo INSERT de versão leva todas as chaves de versionShapeSchema", () => {
+  it("o extrator acusa um INSERT sem uma chave do schema (controle positivo)", () => {
+    const sem = `admin.from("ai_agent_versions").insert({ split_max_chars: 1, followup: { a: 1 } })`;
     const blocos = insertsDeVersao(sem);
     expect(blocos).toHaveLength(1);
+    // split_max_chars presente no objeto, mas system_prompt falta — e um comentário
+    // de fora citando a palavra não conta como chave.
     expect(blocos[0]).toContain("split_max_chars");
-    expect(blocos[0]).not.toContain("inbound_debounce_ms");
+    const faltando = chavesDeConteudoDaVersao().filter(
+      (c) => !chavesNomeadas(blocos[0] ?? "").includes(c),
+    );
+    expect(faltando.some((c) => c === "system_prompt")).toBe(true);
   });
 
-  it("todo INSERT de ai_agent_versions em _actions.ts grava inbound_debounce_ms", () => {
-    const source = readFileSync(join(ROOT, "app/app/ai/agents/[id]/_actions.ts"), "utf8");
-    const blocos = insertsDeVersao(source);
-    expect(blocos.length).toBeGreaterThan(0);
-    const semColuna = blocos.filter((b) => !b.includes("inbound_debounce_ms"));
-    expect(semColuna.map((b) => b.slice(0, 200))).toEqual([]);
+  it("todos os caminhos que gravam versão levam todas as chaves", () => {
+    for (const file of FILES_WITH_VERSION_INSERTS) {
+      const source = readFileSync(join(ROOT, file), "utf8");
+      const blocos = insertsDeVersao(source);
+      // duplicate espalha versionPayloadFrom: o texto do insert não lista as chaves;
+      // o corpo do helper versionPayloadFrom é o ponto em que elas aparecem.
+      const alvos = file.includes("duplicate.ts")
+        ? [corpoDeVersionPayloadFrom(source)]
+        : blocos;
+      expect(alvos.length).toBeGreaterThan(0);
+      for (const alvo of alvos) {
+        const nomes = chavesNomeadas(alvo);
+        const faltando = chavesDeConteudoDaVersao().filter((c) => !nomes.includes(c));
+        expect({ file, faltando }).toEqual({ file, faltando: [] });
+      }
+    }
   });
 });

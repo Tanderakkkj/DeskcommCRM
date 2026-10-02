@@ -1777,7 +1777,7 @@
   "Mínimo 10 caracteres": "至少 10 个字符",
   "Máximo 500 caracteres": "最多 500 个字符",
   "Razão inválida": "原因无效",
-  "A suspensão bloqueará o acesso dos usuários deste tenant à plataforma. Esta ação pode ser revertida.": "暂停后，该租户的用户将无法访问平台。此操作可以撤销。",
+  "A empresa perde o acesso, e a IA, os envios e as automações dela param. Mensagens na fila e tarefas agendadas são descartadas e não saem ao reativar; os follow-ups em andamento retomam de onde pararam. As mensagens que chegarem continuam gravadas.": "该企业将失去访问权限，其 AI、消息发送和自动化都会停止。队列中的消息和已安排的任务会被丢弃，重新激活后也不会发出；进行中的跟进会从中断处继续。之后收到的消息仍会被保存。",
   "Motivo da suspensão": "暂停原因",
   "Descreva o motivo da suspensão (mínimo 10 caracteres)...": "请描述暂停原因（至少 10 个字符）...",
   "Suspendendo...": "暂停中...",

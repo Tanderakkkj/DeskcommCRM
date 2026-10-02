@@ -681,6 +681,7 @@ qualquer pasta, `bash scripts/instalar-guias.sh`; editando um guia numa branch, 
 naquele clone — no Claude Code a skill GLOBAL vence a do projeto com o mesmo nome:
 
 - `deskcomm-instalar` — instalar, atualizar ou consertar a instalação numa VPS
+- `deskcomm-operacao` — usar o CRM no dia a dia, encontrar telas, fluxos e configurações pela interface
 - `deskcomm-cliente-novo` — configurar o CRM para um cliente ou nicho (agentes, roteadores, follow-ups, conhecimento)
 - `deskcomm-metricas` — desempenho, conversão, custo de IA, funil, relatório
 - `deskcomm-prompt` — afinar o prompt de um agente que não performa

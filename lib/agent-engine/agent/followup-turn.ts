@@ -2,6 +2,7 @@ import {claimOfJob,type JobClaim} from "../queue/claim";
 import {resultadoDoEnvioDoFollowup} from "../edge/crm/send-ledger";
 import { parseServiceBoundary } from "@/lib/atendimento/fronteira";
 import { requireCurrentServiceBoundary } from "@/lib/atendimento/fronteira-server";
+import { OrgNaoOperanteError } from "@/lib/organizacao/operante";
 /**
  * Handler do job `followup_turn` (F3-03; blueprint 1.3) — a peça BUILD da
  * continuidade. A F3-01 (cron persistente) dispara e a F3-02 (tool schedule_followup)
@@ -417,20 +418,32 @@ export function createFollowupTurnHandler(deps: FollowupTurnDeps) {
     // Onda 5 (Task 5.1): turno DIRIGIDO POR FLUXO — guard exclusivo, nunca cai nos
     // caminhos legados abaixo (F3-03/F3-04 seguem intocados quando o campo falta).
     if (payload.followup_enrollment_id !== undefined) {
-      await runFlowDrivenTurn(deps, job, pool, ctx, clock, target, {
-        enrollmentId: payload.followup_enrollment_id,
-        nodeId: payload.node_id,
-        purpose: payload.purpose,
-        promptHint: payload.prompt_hint,
-        fixedBody: payload.fixed_body,
-        templateId: payload.template_id,
-        fallbackTemplateId: payload.fallback_template_id,
-        voltaIndex: payload.volta_index,
-        voltaTotal: payload.volta_total,
-        classes: payload.classes,
-        hint: payload.hint,
-        waits: payload.waits,
-      });
+      try {
+        await runFlowDrivenTurn(deps, job, pool, ctx, clock, target, {
+          enrollmentId: payload.followup_enrollment_id,
+          nodeId: payload.node_id,
+          purpose: payload.purpose,
+          promptHint: payload.prompt_hint,
+          fixedBody: payload.fixed_body,
+          templateId: payload.template_id,
+          fallbackTemplateId: payload.fallback_template_id,
+          voltaIndex: payload.volta_index,
+          voltaTotal: payload.volta_total,
+          classes: payload.classes,
+          hint: payload.hint,
+          waits: payload.waits,
+        });
+      } catch (err) {
+        // A organização parou com este turno JÁ rodando: a suspensão só descarta o
+        // `pending`, e o envio foi barrado aqui. O erro segue para a fila cancelar o
+        // job (`terminal`), mas antes o motor precisa saber que o turno saiu sem
+        // enviar — senão a reativação lê o cancelamento como worker morto e o
+        // dead-man mata a inscrição com `action_turn_never_completed`.
+        if (err instanceof OrgNaoOperanteError && payload.purpose === 'send_message') {
+          await pool.query('select public.fn_followup_turno_descartado($1, $2)', [tenantId, job.id]);
+        }
+        throw err;
+      }
       return;
     }
 

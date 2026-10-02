@@ -198,6 +198,7 @@ cite cada um:
 | Situação                                                                            | Guia                    |
 | ----------------------------------------------------------------------------------- | ----------------------- |
 | Instalar, atualizar ou consertar a instalação numa VPS; domínio, Supabase, WhatsApp | `deskcomm-instalar`     |
+| Usar o CRM no dia a dia; encontrar telas, fluxos e configurações pela interface     | `deskcomm-operacao`     |
 | Configurar o CRM para um cliente ou nicho: agentes, roteadores, follow-ups, base    | `deskcomm-cliente-novo` |
 | Desempenho, conversão, custo de IA, funil, relatório                                | `deskcomm-metricas`     |
 | O agente responde errado, passa tudo para humano, não usa a agenda; afinar o prompt | `deskcomm-prompt`       |
