@@ -951,6 +951,19 @@ export const DICIONARIO: Traducoes = {
   "Salvar responsáveis": { es: "Guardar responsables" },
   "Voltar ao padrão da organização": { es: "Volver al valor predeterminado de la organización" },
   "Responsáveis salvos.": { es: "Responsables guardados." },
+  // ─── Assinatura do emissor (#2066, PR #2079) ───
+  "Quem fala aparece na mensagem?": { es: "¿Quién habla aparece en el mensaje?" },
+  "Ligado, a mensagem que vai ao cliente ganha o nome de quem fala em negrito, na linha de cima. O histórico do CRM guarda o texto como foi escrito. Campanhas, lembretes e integrações por token não assinam.": { es: "Activado, el mensaje que llega al cliente lleva el nombre de quien habla en negrita, en la primera línea. El historial del CRM guarda el texto tal como se escribió. Las campañas, los recordatorios y las integraciones por token no firman." },
+  "Assinar as mensagens dos atendentes": { es: "Firmar los mensajes de los asesores" },
+  "Cada atendente aparece pelo próprio nome, com as iniciais em maiúscula.": { es: "Cada asesor aparece con su propio nombre, con las iniciales en mayúscula." },
+  "Assinar as mensagens da IA": { es: "Firmar los mensajes de la IA" },
+  "A IA aparece pelo nome abaixo, nunca pelo nome de um atendente.": { es: "La IA aparece con el nombre de abajo, nunca con el nombre de un asesor." },
+  "Nome da IA": { es: "Nombre de la IA" },
+  "Sem asteriscos nem quebra de linha.": { es: "Sin asteriscos ni saltos de línea." },
+  "Salvar assinatura": { es: "Guardar firma" },
+  "Assinatura salva.": { es: "Firma guardada." },
+  "Quem fala aparece na mensagem": { es: "Quién habla aparece en el mensaje" },
+  "Põe o nome do atendente ou da IA em negrito na linha de cima da mensagem ao cliente.": { es: "Pone el nombre del asesor o de la IA en negrita en la primera línea del mensaje al cliente." },
   "Não foi possível salvar. Tente novamente.": { es: "No se pudo guardar. Inténtalo de nuevo." },
   "Atendente sem nome": { es: "Asesor sin nombre" },
   "Configurar responsáveis por número": { es: "Configurar responsables por número" },
@@ -1283,6 +1296,8 @@ export const DICIONARIO: Traducoes = {
   "Em atendimento": { es: "En atención" },
   "Aguardando atendente": { es: "Esperando asesor" },
   "Automático atendendo": { es: "Automático atendiendo" },
+  "Sem atendente": { es: "Sin asesor" },
+  Encerrada: { es: "Cerrada" },
   "Automático pausado": { es: "Automático pausado" },
   // Os motivos do silêncio (lib/inbox/comando-da-conversa.ts). "Automático
   // pausado" sozinho respondia a três situações que pedem ações diferentes:
@@ -2497,6 +2512,7 @@ export const DICIONARIO: Traducoes = {
   "Nenhum agente fixado": { es: "Ningún agente fijado" },
   "Começou": { es: "Empezó" },
   "Passos dados": { es: "Pasos dados" },
+  "Etapas executadas": { es: "Etapas ejecutadas" },
   "Onde está agora": { es: "Dónde está ahora" },
   passo: { es: "paso" },
   "não existe mais na versão publicada deste fluxo": { es: "ya no existe en la versión publicada de este flujo" },
@@ -2507,7 +2523,13 @@ export const DICIONARIO: Traducoes = {
   "Desfecho": { es: "Resultado" },
   Motivo: { es: "Motivo" },
   "Última falha": { es: "Último error" },
+  "Falha ao processar a etapa": { es: "Error al procesar la etapa" },
   tentativa: { es: "intento" },
+  "nova tentativa automática": { es: "nuevo intento automático" },
+  "Encerrado sem conversão": { es: "Cerrado sin conversión" },
+  "Pediu para parar": { es: "Pidió que se detenga" },
+  "Passou para um humano": { es: "Pasó a un humano" },
+  "O contato respondeu": { es: "El contacto respondió" },
   "O automático está executando este follow-up agora — as ações abaixo podem ser recusadas por alguns instantes.": {
     es: "El proceso automático está ejecutando este seguimiento ahora. Es posible que las acciones de abajo se rechacen durante unos instantes.",
   },
@@ -3678,6 +3700,15 @@ export const DICIONARIO: Traducoes = {
   },
   "O botão 'Preencher com a conversa' não sugere nada, e quem revisa preenche cada campo lendo a conversa manualmente.": {
     es: "El botón 'Completar con la conversación' no sugiere nada, y quien revisa completa cada campo leyendo la conversación manualmente.",
+  },
+  "Ler o valor da venda na conversa": {
+    es: "Leer el valor de la venta en la conversación",
+  },
+  "Quando um negócio vindo de anúncio da Meta é ganho sem valor preenchido, lê a conversa e acha o valor e o produto vendidos, para a compra ser reportada à Meta. Só aceita valor que aparece escrito na conversa.": {
+    es: "Cuando un negocio que vino de un anuncio de Meta se gana sin valor completado, lee la conversación y encuentra el valor y el producto vendidos, para reportar la compra a Meta. Solo acepta un valor que aparece escrito en la conversación.",
+  },
+  "A venda vinda de anúncio fica como pendência 'sem valor' em Configurações › Conversões, e a Meta não recebe a compra até alguém preencher o valor do negócio.": {
+    es: "La venta que vino de un anuncio queda como pendiente 'sin valor' en Configuración › Conversiones, y Meta no recibe la compra hasta que alguien complete el valor del negocio.",
   },
   "Transformar proposta da empresa em modelo": {
     es: "Transformar propuesta de la empresa en modelo",
@@ -5241,6 +5272,9 @@ export const DICIONARIO: Traducoes = {
   "A assinatura não conferiu. Quem enviou não usou o segredo configurado nesta fonte.": {
     es: "La firma no coincidió. Quien envió no usó el secreto configurado en esta fuente.",
   },
+  "O segredo de assinatura desta fonte não pôde ser lido nesta instalação, então nada entra por ela. Cadastre a assinatura de novo na fonte.": {
+    es: "El secreto de firma de esta fuente no se pudo leer en esta instalación, así que nada entra por ella. Vuelve a registrar la firma en la fuente.",
+  },
   "Os dados chegaram, mas o lead não pôde ser criado — confira se o funil e a etapa da fonte ainda existem.": {
     es: "Los datos llegaron, pero no se pudo crear el lead. Revisa que el embudo y la etapa de la fuente sigan existiendo.",
   },
@@ -5975,6 +6009,18 @@ export const DICIONARIO: Traducoes = {
     es: "El tiempo se cuenta desde la última actividad de una persona en la conversación: asumirla, responder desde la pantalla o desde el celular. Solo se devuelve donde hay un agente publicado. Si la opción está desactivada, rige la regla de siempre: la IA solo vuelve cuando alguien hace clic en Devolver.",
   },
   "Minutos sem resposta da equipe": { es: "Minutos sin respuesta del equipo" },
+  "Quando alguém responde pelo celular, a IA espera quanto tempo?": {
+    es: "Cuando alguien responde desde el celular, ¿cuánto tiempo espera la IA?",
+  },
+  "Quando alguém da equipe responde o cliente direto pelo celular, fora do sistema, o agente de IA fica calado naquela conversa por este tempo. Cada nova resposta pelo celular recomeça a contagem.": {
+    es: "Cuando alguien del equipo responde al cliente directamente desde el celular, fuera del sistema, el agente de IA se queda callado en esa conversación durante este tiempo. Cada nueva respuesta desde el celular reinicia la cuenta.",
+  },
+  "Minutos de silêncio da IA depois de uma resposta pelo celular": {
+    es: "Minutos de silencio de la IA después de una respuesta desde el celular",
+  },
+  "Entre 5 minutos e 24 horas. O padrão é 60. Quem atende o dia inteiro pelo celular costuma preferir um prazo curto, como 15, para a IA voltar a responder entre um atendimento e outro.": {
+    es: "Entre 5 minutos y 24 horas. El valor predeterminado es 60. Quien atiende todo el día desde el celular suele preferir un plazo corto, como 15, para que la IA vuelva a responder entre una atención y otra.",
+  },
   "Quando alguém responde, a conversa fica com essa pessoa?": {
     es: "Cuando alguien responde, ¿la conversación se queda con esa persona?",
   },
@@ -6010,6 +6056,15 @@ export const DICIONARIO: Traducoes = {
   "Rodízio automático entre os atendentes": { es: "Rotación automática entre los asesores" },
   "Cliente 1 vai para o atendente A, cliente 2 para o B, e ao acabar a lista volta ao primeiro. Quem recebe é sempre quem está há mais tempo sem receber — entre os que estão disponíveis e dentro do horário. Ninguém escolhe, então não há fila furada.": {
     es: "El cliente 1 va al asesor A, el cliente 2 al B y, al terminar la lista, vuelve al primero. Siempre recibe quien lleva más tiempo sin recibir, entre los que están disponibles y dentro de su horario. Nadie elige, así que nadie se salta la fila.",
+  },
+  "Vai para quem tem menos conversas na mão": {
+    es: "Va a quien tiene menos conversaciones",
+  },
+  "Menor carga (quem tem menos conversas na mão)": {
+    es: "Menor carga (quien tiene menos conversaciones)",
+  },
+  "Cada cliente novo cai com quem está com MENOR número de conversas em aberto. Em caso de empate vale o rodízio — quem está há mais tempo sem receber leva. Entre os que estão disponíveis e dentro do horário, como nos outros modos. É o modo para time grande, onde deixar uma pessoa com tudo e outra parada custa caro.": {
+    es: "Cada cliente nuevo cae con quien tiene MENOR número de conversaciones abiertas. En caso de empate vale la rotación — quien lleva más tiempo sin recibir la lleva. Entre quienes están disponibles y dentro del horario, como en los demás modos. Es el modo para equipos grandes, donde dejar a una persona con todo y a otra parada sale caro.",
   },
   "Todos veem tudo": { es: "Todos ven todo" },
   "Qualquer atendente abre a conversa e o negócio de qualquer colega.": {
@@ -6877,6 +6932,9 @@ export const DICIONARIO: Traducoes = {
   "Velocidade de reprodução": { es: "Velocidad de reproducción" },
   "Ampliar imagem": { es: "Ampliar imagen" },
   "Imagem recebida": { es: "Imagen recibida" },
+  // Transcrição do áudio no balão (#2133): rótulo e estado de carregamento.
+  Transcrição: { es: "Transcripción" },
+  "Transcrevendo…": { es: "Transcribiendo…" },
   // Anexo da nota interna (#1863, F3) — "recebida" mentiria: quem anexou é o time.
   "Imagem da nota interna": { es: "Imagen de la nota interna" },
   Baixar: { es: "Descargar" },
@@ -8238,7 +8296,6 @@ export const DICIONARIO: Traducoes = {
     es: "Cómo se distribuyen las conversaciones nuevas entre los asesores de la organización.",
   },
   "Modo": { es: "Modo" },
-  "Balanceamento por carga (em breve)": { es: "Balanceo de carga (próximamente)" },
   "Tentativas máx.": { es: "Intentos máx." },
   "Backoff (s)": { es: "Backoff (s)" },
   "Atendentes": { es: "Asesores" },

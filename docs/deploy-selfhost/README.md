@@ -112,6 +112,11 @@ grant execute on all functions in schema public to agent_worker;
 alter default privileges for role "postgres" in schema public grant execute on functions to agent_worker;
 alter default privileges for role "postgres" in schema public grant usage, select on sequences to agent_worker;
 alter default privileges for role "postgres" in schema public grant select, insert, update, delete on tables to agent_worker;
+
+-- A auditoria é só-inclusão para todo papel: o worker grava e lê
+-- `api_audit_log`, nunca altera nem apaga. O `baseline.sql` reafirma isto a
+-- cada `update.sh` (migration 0525), com o nome que o papel tiver.
+revoke update, delete, truncate on table public.api_audit_log from agent_worker;
 ```
 Se o papel do **dono** na sua instalação não for `postgres` (ex.: você usa um
 superusuário com outro nome), troque `for role "postgres"` pelo nome dele nas

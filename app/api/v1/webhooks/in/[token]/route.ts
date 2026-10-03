@@ -35,7 +35,7 @@ import {
   type RdStationMapped,
 } from "@/lib/webhooks/rdstation";
 import { isElementorPayload, mapElementorPayload, type ElementorMapped } from "@/lib/webhooks/elementor";
-import { origemDaPagina, registrarCaptacao } from "@/lib/webhooks/captacao";
+import { origemDaPagina, registrarCaptacao, type MotivoDaRecusa } from "@/lib/webhooks/captacao";
 import { ipDoClienteParaInet } from "@/lib/http/ip-do-cliente";
 import { decryptWebhookSecret } from "@/lib/webhooks/secrets";
 import { ApiError } from "@/lib/api/types";
@@ -127,29 +127,41 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
   };
 
   const sigHeader = req.headers.get(HEADER_ASSINATURA_DE_ENTRADA);
-  // secret cifrado at-rest (migration 0041). Decrypt falhou (chave da GUC
-  // ausente/trocada)? Precedente WAHA: pula a validação em vez de derrubar a
-  // captação — secret aqui é defesa opcional, não gate de disponibilidade.
+  // secret cifrado at-rest (migration 0041). A fonte que TEM segredo exige
+  // assinatura; se esta instalação não consegue decifrá-lo (chave mestra
+  // ausente/trocada, dado corrompido), não há como conferir — e o que não se
+  // confere não entra. Mesma regra da autenticação do WAHA
+  // (lib/waha/webhook-auth.ts): falha FECHADA. O operador vê o motivo em
+  // "Leads recebidos" e recadastra a assinatura da fonte.
   let sourceSecret: string | null = null;
-  let hmacSkipped = false;
+  let recusa: MotivoDaRecusa | null = null;
   if (source.secret_encrypted) {
     sourceSecret = await decryptWebhookSecret(admin, source.secret_encrypted as unknown as string);
-    if (sourceSecret === null) hmacSkipped = true;
+    if (sourceSecret === null) {
+      logger.error("[webhooks.in] segredo da fonte não decifra — captação recusada até recadastrar a assinatura", {
+        organizationId: source.organization_id,
+        webhookSourceId: source.id,
+        requestId,
+      });
+      recusa = "assinatura_indecifravel";
+    } else if (!verifyInboundSignature(rawBody, sigHeader, sourceSecret)) {
+      recusa = "assinatura_invalida";
+    }
   }
-  const validSignature = sourceSecret ? verifyInboundSignature(rawBody, sigHeader, sourceSecret) : null;
-  if (sourceSecret && !validSignature) {
+  if (recusa) {
     await audit({
       action: "webhook.inbound_invalid_signature",
       organizationId: source.organization_id,
       resourceType: "webhook_source",
       resourceId: source.id,
       requestId,
+      metadata: { reason: recusa },
     });
     await registrarCaptacao(admin, {
       ...fonteDaCaptacao,
       ...origemDaCaptacao,
       outcome: "recusado",
-      rejectReason: "assinatura_invalida",
+      rejectReason: recusa,
     });
     return fail("unauthenticated", "invalid_signature", 401, { requestId });
   }
@@ -169,10 +181,9 @@ export async function POST(req: NextRequest, ctx: RouteCtx): Promise<NextRespons
     raw_body: rawBody,
     payload_parsed: payload,
     signature_header: sigHeader ?? null,
-    // hmacSkipped (decrypt indisponível) conta como "não validado mas aceito",
-    // igual ao webhook WAHA — o feed da UI não pinta de vermelho.
-    valid_signature: validSignature ?? true,
-    event_type: hmacSkipped ? "lead_capture.received_hmac_skipped" : "lead_capture.received",
+    // Daqui só passa fonte sem segredo ou assinatura que conferiu.
+    valid_signature: true,
+    event_type: "lead_capture.received",
     external_id: null,
     status: "received",
     attempts: 0,

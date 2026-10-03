@@ -18,6 +18,12 @@ const MIGRADOS: ReadonlyArray<{ caminho: string; helper: string }> = [
   { caminho: "lib/agent-engine/agent/abertura/checkpoint.ts", helper: "@/lib/agent-engine/texto/extrair-json-do-texto" },
   { caminho: "lib/agent-engine/flywheel/live.ts", helper: "@/lib/agent-engine/texto/extrair-json-do-texto" },
   { caminho: "lib/agent-engine/agent/intent-classifier.ts", helper: "@/lib/agent-engine/texto/extrair-json-do-texto" },
+  // #2124 — os seis leitores restantes (cinco arquivos; followup-flow-classify tem dois).
+  { caminho: "lib/onboarding/sugerir-funil.ts", helper: "@/lib/agent-engine/texto/extrair-json-do-texto" },
+  { caminho: "lib/agent-engine/agent/flow-validate.ts", helper: "@/lib/agent-engine/texto/extrair-json-do-texto" },
+  { caminho: "lib/agent-engine/agent/followup-flow-classify.ts", helper: "@/lib/agent-engine/texto/extrair-json-do-texto" },
+  { caminho: "lib/agent-engine/guardrails/jailbreak/classifier.ts", helper: "@/lib/agent-engine/texto/extrair-json-do-texto" },
+  { caminho: "lib/agent-engine/guardrails/promise/semantic.ts", helper: "@/lib/agent-engine/texto/extrair-json-do-texto" },
 ];
 
 describe("extrair-json-do-texto — a cerca do dono (nenhum parser frágil re-germina)", () => {

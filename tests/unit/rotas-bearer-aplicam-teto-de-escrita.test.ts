@@ -38,8 +38,12 @@ const TETO_POR_OUTRO_CAMINHO: Record<string, string> = {
   "app/api/v1/messages/route.ts": "checkRateLimit",
 };
 
+// O que se cobra é o PAR chamada + `return`, não o nome das variáveis: a
+// `prospecting` chama o resultado do `resolveAuthDual` de `auth`, e a
+// `agenda/tipos` passa `requestId ?? ""`. As duas aplicam o teto; exigir
+// `authz`/`requestId` literais reprovava a main com as duas rotas certas.
 const CHAMADA_COM_RETURN =
-  /const (\w+) = await tetoDeEscritaDoToken\(authz, "[^"]+", requestId\);\s*if \(\1\) return \1;/;
+  /const (\w+) = await tetoDeEscritaDoToken\(\w+, "[^"]+", [^;]+\);\s*if \(\1\) return \1;/;
 
 const rotasBearer = (readdirSync(BASE, { recursive: true }) as string[])
   .filter((rel) => path.basename(rel) === "route.ts")

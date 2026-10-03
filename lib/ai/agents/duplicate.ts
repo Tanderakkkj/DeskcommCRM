@@ -51,8 +51,14 @@ export type DuplicateAgentResult =
  * Campos da versão que são copiados. Lista explícita (e não spread do row) porque
  * `id`, `version_number`, `status`, `published_at` e `superseded_at` NÃO podem
  * vazar da origem — a cópia é sempre uma draft nova.
+ *
+ * Exportada porque é a MESMA cópia que `lib/ai/apply-proposal.ts` faz ao aplicar
+ * uma proposta (#2126): lá também se cria uma draft nova a partir da publicada,
+ * e uma lista à mão lá perdia 11 chaves de `versionShapeSchema`. Quem grava
+ * versão copiando de outra versão usa este helper — a cerca
+ * (`tests/unit/agent-version-columns-drift.test.ts`) cobra o corpo dele.
  */
-function versionPayloadFrom(src: Record<string, unknown>) {
+export function versionPayloadFrom(src: Record<string, unknown>) {
   return {
     system_prompt: src.system_prompt,
     provider: src.provider,

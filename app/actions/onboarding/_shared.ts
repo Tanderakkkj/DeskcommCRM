@@ -20,7 +20,8 @@ export class OnboardingError extends Error {
       | "no_active_org"
       | "forbidden"
       | "not_found"
-      | "db_error",
+      | "db_error"
+      | "org_ja_configurada",
     message: string,
   ) {
     super(message);
@@ -104,6 +105,15 @@ export async function patchOnboardingState(
   orgId: string,
   patch: Partial<OnboardingState>,
   extra?: { display_name?: string; timezone?: string },
+  /**
+   * `soNoWizard`: grava só se a organização ainda NÃO terminou o onboarding
+   * e recusa com `org_ja_configurada` caso contrário. Só as boas-vindas pedem
+   * isso (#2113). Os outros passos já tiveram efeito fora daqui (agente
+   * publicado, convite enviado, quadro aplicado) e precisam registrar o passo
+   * mesmo numa aba antiga — recusar ali deixaria o efeito sem estado,
+   * auditoria nem evento.
+   */
+  opcoes?: { soNoWizard?: boolean },
 ): Promise<void> {
   const admin = createAdminClient();
   const { state } = await loadOnboardingState(orgId);
@@ -111,6 +121,29 @@ export async function patchOnboardingState(
   const update: Record<string, unknown> = { onboarding_state: merged };
   if (extra?.display_name) update.display_name = extra.display_name;
   if (extra?.timezone) update.timezone = extra.timezone;
-  const { error } = await admin.from("organizations").update(update).eq("id", orgId);
+  if (!opcoes?.soNoWizard) {
+    const { error } = await admin.from("organizations").update(update).eq("id", orgId);
+    if (error) throw new OnboardingError("db_error", error.message);
+    return;
+  }
+  // #2113: a aba de boas-vindas pode ficar aberta enquanto o onboarding é
+  // concluído em OUTRA aba. Sem esta condição, o submit regravava
+  // `display_name` e `onboarding_state` numa organização já configurada.
+  // O `.is("onboarded_at", null)` faz a escrita só na organização que ainda
+  // está no wizard; o `.select("id")` devolve as linhas afetadas (PostgREST),
+  // e zero linhas quer dizer "alguém terminou antes" — aí NÃO se grava nada.
+  const { data, error } = await admin
+    .from("organizations")
+    .update(update)
+    .eq("id", orgId)
+    .is("onboarded_at", null)
+    .select("id");
   if (error) throw new OnboardingError("db_error", error.message);
+  // Com `.select("id")` o contrato do PostgREST é um ARRAY de linhas afetadas:
+  // `[]` = nenhuma bateu no filtro (org já configurada, ou finalizada entre a
+  // releitura e a escrita). Um array vazio é a única resposta que significa
+  // "zero linhas" — `data` nulo vem de dublê que não simula o `select`.
+  if (Array.isArray(data) && data.length === 0) {
+    throw new OnboardingError("org_ja_configurada", "Organização já configurada.");
+  }
 }

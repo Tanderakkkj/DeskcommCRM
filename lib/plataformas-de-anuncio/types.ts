@@ -79,7 +79,11 @@ export interface ConversaoOffline {
    * um backlog de drain virar atribuição errada em vez de erro visível.
    */
   ocorridoEm: Date;
-  /** O clique que originou a conversa — `ad_source_id` do contato (0164). */
+  /**
+   * O clique que originou a conversa — `ad_source_id` do contato (0164).
+   * Vazio quando a pessoa chegou pela página com UTM da Meta: aí a identidade
+   * é só o telefone, e o transporte declara a origem de acordo.
+   */
   cliqueDeOrigem: string;
   identificadoresGoogle?: IdentificadoresGoogle;
   /** E.164 sem `+`, ainda EM CLARO: o hash é responsabilidade do transporte. */

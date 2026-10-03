@@ -400,6 +400,18 @@ export const PONTOS_DE_IA: readonly PontoDeIa[] = [
       "Dado errado entra no cadastro do cliente (ex.: o modelo grava a resposta na pergunta errada) ou o cliente fica sem a pergunta seguinte.",
     registraEm: "llm_calls",
   },
+  {
+    id: "conversion_value_from_conversation",
+    rotulo: "Ler o valor da venda na conversa",
+    oQueFaz:
+      "Quando um negócio vindo de anúncio da Meta é ganho sem valor preenchido, lê a conversa e acha o valor e o produto vendidos, para a compra ser reportada à Meta. Só aceita valor que aparece escrito na conversa.",
+    papel: "entender",
+    exige: { tools: true },
+    emissor: "lib/conversoes/valor-da-conversa.ts",
+    sintomaDeFalha:
+      "A venda vinda de anúncio fica como pendência 'sem valor' em Configurações › Conversões, e a Meta não recebe a compra até alguém preencher o valor do negócio.",
+    registraEm: "llm_calls",
+  },
 
   // ────────────────────────── Proteger a operação ──────────────────────────
   {

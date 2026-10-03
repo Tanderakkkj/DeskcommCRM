@@ -419,6 +419,42 @@ sincronizar_signup_mode_do_gotrue() {
   return 0
 }
 
+# ── E-mails de acesso: o GoTrue busca o MOLDE no app (#2109) ────────────────
+#
+# O molde padrão do GoTrue linka para `/auth/v1/verify`, e o clique em "esqueci
+# a senha" termina em `/login?error=link_invalido` (diagnóstico na #2109). As
+# rotas `/email-templates/recovery` e `/email-templates/confirmation` do app
+# emitem o link com `token_hash`, que `app/auth/confirm` sabe fechar.
+#
+# O compose oficial do Supabase não mapeia estas chaves para o serviço `auth`
+# (só `GOTRUE_SMTP_*` e `GOTRUE_MAILER_URLPATHS_*`), então elas valem DUAS
+# vezes: no .env do Supabase, que o compose interpola, e no
+# `supabase-single-server.override.yml`, que as entrega ao contêiner.
+#
+# Chamada pelo install-single-server.sh (com o domínio que ele recebeu) e por
+# atualizar_supabase_single_server (sem domínio: sai do SITE_URL que o
+# instalador gravou como https://DOMINIO). Valor já presente — no .env do
+# Supabase ou no ambiente — manda: nada sobrescreve um molde que o operador já
+# apontou. Sem URL https para montar o caminho, não grava nada: um molde
+# apontado para `localhost` seria pior que o padrão.
+gravar_modelos_do_gotrue() {  # gravar_modelos_do_gotrue <.env do Supabase> [https://DOMINIO]
+  local env_sb="$1" base="${2:-}" chave caminho valor
+  [ -f "$env_sb" ] || return 0
+  [ -n "$base" ] || base="$(valor_do_env "$env_sb" SITE_URL)"
+  case "$base" in https://?*) base="${base%/}" ;; *) return 0 ;; esac
+  for chave in GOTRUE_MAILER_TEMPLATES_CONFIRMATION GOTRUE_MAILER_TEMPLATES_RECOVERY; do
+    [ -n "$(valor_do_env "$env_sb" "$chave")" ] && continue
+    case "$chave" in
+      *CONFIRMATION) caminho=/email-templates/confirmation ;;
+      *) caminho=/email-templates/recovery ;;
+    esac
+    valor="${!chave:-}"
+    [ -n "$valor" ] || valor="${base}${caminho}"
+    set_env_var "$env_sb" "$chave" "$valor"
+  done
+  return 0
+}
+
 # ── O update.sh leva o Supabase até a versão pinada ──────────────────────────
 #
 # O `update.sh` oficial do Supabase faz o merge de três vias dos arquivos dele
@@ -438,6 +474,10 @@ atualizar_supabase_single_server() {
       c_ylw "$(t "⚠ O Supabase não foi atualizado; segue na versão {1}. A próxima atualização tenta de novo." "${atual:-$(t "anterior")}")"
     fi
   fi
+  # #2109 — no corpo desta função, e não numa linha do update.sh, pelo mesmo
+  # motivo do #1653 logo abaixo. Antes do `up -d --wait`: o compose recria o
+  # auth com o ambiente novo, sem reinício à parte.
+  gravar_modelos_do_gotrue "$dir/.env"
   dc_supabase up -d --wait || return 1
   # #1653 — a sincronização do modo de cadastro mora AQUI, no corpo desta
   # função, e não numa linha do update.sh. Na atualização que traz este

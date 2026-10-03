@@ -49,7 +49,9 @@ import {
 import type { ListMessagesQuery, SendMessageInput } from "@/lib/schemas";
 import { sendTemplateForSession } from "@/lib/channels/meta/send-template-for-session";
 import { emitirFalhaDeEntrega } from "@/lib/messaging/falha-de-entrega";
+import { aplicarAssinatura, configAssinatura, linhaDeAssinatura } from "@/lib/messaging/assinatura";
 import { nomeDoContato } from "@/lib/contacts/rotulo-do-contato";
+import { nomesDosAtendentes } from "@/lib/users/nome-do-atendente";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Message } from "@/lib/types/messaging";
 
@@ -557,6 +559,38 @@ export async function sendMessageHandler(
   let outboundBody = input.body ?? null;
   let outboundMetadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
 
+  // ─── Assinatura do emissor (#2066) ─────────────────────────────────────────
+  // Opt-in por organização (`organizations.settings.assinatura_mensagens`). A
+  // assinatura entra SÓ no texto enviado ao canal (corpo de texto e legenda de
+  // mídia) — o que fica gravado em `messages.body` é o que o emissor escreveu
+  // (insertRow abaixo usa `input.body`). Automação e sistemas externos
+  // (`automation`/`system`) ficam de fora, como o relato pede. Humano ganha o
+  // nome do atendente com iniciais em maiúsculo; a IA, o nome configurável.
+  const origemDoEmissor = origemDaMensagem(ctx.actor);
+  let assinatura: string | null = null;
+  if (origemDoEmissor === "user" || origemDoEmissor === "ai") {
+    const { data: orgAssinatura } = await supabase
+      .from("organizations")
+      .select("settings")
+      .eq("id", ctx.organization_id)
+      .maybeSingle();
+    const configAss = configAssinatura(orgAssinatura?.settings);
+    const coberta =
+      (origemDoEmissor === "user" && configAss.humanos) ||
+      (origemDoEmissor === "ai" && configAss.ia);
+    if (coberta) {
+      let nomeDoAtendente: string | null = null;
+      if (origemDoEmissor === "user" && ctx.actor.type === "user") {
+        nomeDoAtendente = (await nomesDosAtendentes([ctx.actor.id])).get(ctx.actor.id) ?? null;
+      }
+      assinatura = linhaDeAssinatura(configAss, origemDoEmissor, nomeDoAtendente);
+    }
+  }
+
+  /** O corpo com a assinatura, quando ela se aplica a esta origem e há texto. */
+  const corpoDoCanal = (texto: string | null): string | null =>
+    aplicarAssinatura(assinatura, texto) ?? null;
+
   if (input.type === "contact") {
     const sharedId = input.metadata?.shared_contact_id;
     const inline = input.metadata?.shared_contact;
@@ -970,7 +1004,7 @@ export async function sendMessageHandler(
             url: signed.signedUrl,
             mime: input.media_mime ?? "application/octet-stream",
             filename,
-            caption: input.body ?? null,
+            caption: corpoDoCanal(input.body ?? null),
           },
           // O id que a PLATAFORMA conhece, lido da linha citada agora — não uma
           // cópia guardada no envio, que poderia divergir da linha.
@@ -996,7 +1030,7 @@ export async function sendMessageHandler(
           media: {
             url: input.media_url,
             mime: input.media_mime ?? "application/octet-stream",
-            caption: input.body ?? null,
+            caption: corpoDoCanal(input.body ?? null),
           },
           replyToExternalId: citada?.external_id ?? null,
         }));
@@ -1038,7 +1072,7 @@ export async function sendMessageHandler(
           to: chatId,
           providerConversationId: c.provider_conversation_id,
           kind: input.type,
-          body: input.body ?? "",
+          body: corpoDoCanal(input.body ?? "") ?? "",
           replyToExternalId: citada?.external_id ?? null,
         }));
       }

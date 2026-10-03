@@ -153,7 +153,6 @@ export const PUBLIC_PATHS: RegExp[] = [
   /^\/app-icon\/(192|512)$/,
   /^\/manifest\.webmanifest$/,
   /^\/team\/accept-invite\/.+$/,
-  /^\/account-suspended$/,
   // OS MOLDES DE E-MAIL DO GoTrue. Quem busca é o GoTrue, um processo de
   // terceiro que não tem — nem pode ter — sessão nossa. O conteúdo é HTML com
   // placeholders Go (`{{ .TokenHash }}`) mais nome, cor e logo da instalação,

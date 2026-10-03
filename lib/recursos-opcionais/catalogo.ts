@@ -36,6 +36,7 @@ import { vendaPeloCanalLigada } from "@/lib/conversoes/venda-pelo-canal";
 import { lerConfigDoJev } from "@/lib/ai/decisao/config";
 import { capacidadesLigadas, type CapacidadeDaOrganizacao } from "@/lib/organizacao/capacidades";
 import { conversaFicaComQuemAtendeu } from "@/lib/schemas/routing";
+import { configAssinatura } from "@/lib/messaging/assinatura";
 
 /** Quem decide: o servidor inteiro, a empresa, cada agente, ou o arquivo do servidor. */
 export type NivelDoRecurso = "instalacao" | "organizacao" | "agente" | "servidor";
@@ -343,6 +344,19 @@ const DA_EMPRESA: RecursoOpcional[] = [
     quemDecide: "manager",
     href: "/app/settings/atendimento",
     ler: peloSettings((s) => s.visibility_mode === "own" || s.visibility_mode === "own_and_unassigned"),
+  },
+  {
+    id: "assinatura_do_emissor",
+    nome: "Quem fala aparece na mensagem",
+    oQueFaz: "Põe o nome do atendente ou da IA em negrito na linha de cima da mensagem ao cliente.",
+    nivel: "organizacao",
+    padrao: "desligado",
+    quemDecide: "manager",
+    href: "/app/settings/atendimento",
+    ler: peloSettings((s) => {
+      const c = configAssinatura(s);
+      return c.humanos || c.ia;
+    }),
   },
   {
     id: "etapa_move_o_card",

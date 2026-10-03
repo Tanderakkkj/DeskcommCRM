@@ -999,6 +999,10 @@ export const AUDIT_ACTIONS = [
   "company_people.updated",
   "contacts.person_linked",
   "imports.companies_people",
+
+  // A assinatura do emissor (#2066, PR #2079): quem ligou ou desligou o nome de
+  // quem fala nas mensagens ao cliente, e com que nome a IA passou a assinar.
+  "settings.message_signature_updated",
 ] as const;
 
 /** Um código de auditoria. Derivado de `AUDIT_ACTIONS` — não redigite a lista. */

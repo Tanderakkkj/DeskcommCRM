@@ -106,3 +106,26 @@ export function extrairJsonDoTexto(texto: string): unknown | null {
   }
   return null;
 }
+/**
+ * Primeiro OBJETO JSON do texto, ou `null` — o que todo leitor de veredito quer.
+ *
+ * `extrairJsonDoTexto` devolve o texto inteiro quando ele todo parseia, e um
+ * `[{...}]` vira ARRAY — que passa pela guarda `typeof x !== "object"` dos
+ * leitores e chega a eles como veredito sem campo nenhum (triagem do #2144: o
+ * guardrail de promessa caía em "sem promessa" sem o warn de parse-fail).
+ * Aqui array e escalar no topo não são a resposta: a varredura de blocos acha o
+ * primeiro objeto lá dentro — o mesmo que o recorte antigo `{…}` achava.
+ */
+export function extrairObjetoJsonDoTexto(texto: string): Record<string, unknown> | null {
+  const valor = extrairJsonDoTexto(texto);
+  if (ehObjeto(valor)) return valor;
+  for (const bloco of blocosDeNivelSuperior(texto)) {
+    const v = tentarParsear(bloco);
+    if (ehObjeto(v)) return v;
+  }
+  return null;
+}
+
+function ehObjeto(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}

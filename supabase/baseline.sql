@@ -27080,7 +27080,9 @@ as $$
 declare
   v_canonical text[] := array['requested_by_customer','price','no_response','product_unavailable',
                               'cancelled_by_store','cancelled_by_customer','payment_failed','other',
-                              'moved_to_another_pipeline'];
+                              'moved_to_another_pipeline',
+                              -- migration 0513 (#2049): quem respondeu PARAR. Conta como perda.
+                              'opted_out_of_messages'];
   v_pipeline_extra text[];
 begin
   if new.status = 'lost' then
@@ -44343,6 +44345,67 @@ create trigger trg_fechar_aviso_do_jev_ao_bloquear
  execute function public.fn_fechar_aviso_do_jev_ao_bloquear();
 
 notify pgrst, 'reload schema';
+
+-- ---- a trava de imutabilidade da versão publicada cobre as duas colunas
+-- que ficaram de fora (migration 0503, issue #2003) ----
+-- A lista de `fn_ai_agent_version_content_immutable` é escrita à mão e, desde
+-- o último create or replace (que cobria knowledge_source_ids), ficaram de
+-- fora `proposal_ai_draft_enabled` (flag por-agente que a tela edita) e
+-- `inbound_debounce_ms` (janela de rajada, migration 0498 / PR #1997). A camada
+-- da app devolve 409 mas é a única cerca; esta é a segunda, defense-in-depth,
+-- aberta para a service key. O invariante
+-- `tests/unit/trigger-imutavel-cobre-todas-as-colunas-de-conteudo.test.ts`
+-- compara a ÚLTIMA definição que vale contra o conjunto de conteúdo.
+create or replace function fn_ai_agent_version_content_immutable() returns trigger
+-- search_path fixo na PRÓPRIA definição: um create or replace sem a cláusula
+-- apaga o alter function ... set search_path da 0521 (invariante
+-- tests/invariants/avisos-do-security-advisor.test.ts).
+language plpgsql set search_path = '' as $fn$
+begin
+  if old.status <> 'draft' and (
+       new.system_prompt          is distinct from old.system_prompt
+    or new.provider               is distinct from old.provider
+    or new.model                  is distinct from old.model
+    or new.credential_id          is distinct from old.credential_id
+    or new.tool_ids               is distinct from old.tool_ids
+    or new.trigger_config         is distinct from old.trigger_config
+    or new.channel_session_id     is distinct from old.channel_session_id
+    or new.max_steps              is distinct from old.max_steps
+    or new.token_budget           is distinct from old.token_budget
+    or new.cost_budget_cents      is distinct from old.cost_budget_cents
+    or new.history_message_window is distinct from old.history_message_window
+    or new.history_token_window   is distinct from old.history_token_window
+    or new.handoff_keywords       is distinct from old.handoff_keywords
+    or new.handoff_tool_enabled   is distinct from old.handoff_tool_enabled
+    or new.followup               is distinct from old.followup
+    or new.multimodal_input       is distinct from old.multimodal_input
+    or new.video_frames_enabled   is distinct from old.video_frames_enabled
+    or new.split_messages         is distinct from old.split_messages
+    or new.split_max_chars        is distinct from old.split_max_chars
+    or new.cases_enabled          is distinct from old.cases_enabled
+    or new.operator_enabled       is distinct from old.operator_enabled
+    or new.operator_model         is distinct from old.operator_model
+    or new.operator_tool_ids      is distinct from old.operator_tool_ids
+    or new.pipeline_ids           is distinct from old.pipeline_ids
+    or new.knowledge_source_ids   is distinct from old.knowledge_source_ids
+    or new.proposal_ai_draft_enabled is distinct from old.proposal_ai_draft_enabled
+    or new.inbound_debounce_ms    is distinct from old.inbound_debounce_ms
+    or new.version_number         is distinct from old.version_number
+    or new.agent_id               is distinct from old.agent_id
+    or new.organization_id        is distinct from old.organization_id
+  ) then
+    raise exception 'ai_agent_versions % é imutável (status=%): mudança de conteúdo = versão draft nova; rollback = revert (clona + publica)',
+      old.id, old.status;
+  end if;
+  return new;
+end;
+$fn$;
+
+drop trigger if exists trg_ai_agent_versions_content_immutable on public.ai_agent_versions;
+create trigger trg_ai_agent_versions_content_immutable
+  before update on public.ai_agent_versions
+  for each row execute function fn_ai_agent_version_content_immutable();
+
 -- ---- a recusa permanente do atendimento não pede repetição (migration 0514) ----
 -- `PT409` no lugar de `40001` em `service_stale` de `fn_service_status` (a
 -- revisão esperada não bate: recusa PERMANENTE). `40001` vira HTTP 500 no
@@ -46011,3 +46074,71 @@ comment on column public.ai_agent_versions.inbound_debounce_ms is
 alter table public.ai_agent_versions
   add constraint ai_agent_versions_inbound_debounce_ms_check
   check (inbound_debounce_ms is null or (inbound_debounce_ms >= 0 and inbound_debounce_ms <= 60000));
+
+-- ---- avisos do Security Advisor: search_path fixo e definer só do servidor (migration 0521) ----
+-- Cópia das instruções da migration 0521 (o porquê está no cabeçalho dela). Só ALTER/REVOKE:
+-- não cria função, então pode ficar depois da VARREDURA anon.
+alter function public.fn_agent_versions_immutable() set search_path = '';
+alter function public.fn_ai_agent_version_content_immutable() set search_path = '';
+alter function public.fn_contato_anonimizado_limpa_campos_personalizados() set search_path = '';
+alter function public.fn_degraus_de_lembrete_validos(integer[]) set search_path = '';
+alter function public.fn_corpos_de_lembrete_validos(jsonb) set search_path = '';
+alter function public.fn_lancamento_pago_e_imutavel() set search_path = '';
+alter function public.fn_resolve_inbound_number(text) set search_path = '';
+
+revoke execute on function public.fn_resolve_inbound_number(text) from public, anon, authenticated;
+grant execute on function public.fn_resolve_inbound_number(text) to service_role;
+
+do $$
+declare
+  f regprocedure;
+begin
+  for f in
+    select p.oid::regprocedure
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace
+     where n.nspname = 'public' and p.proname = 'rls_auto_enable'
+  loop
+    execute format('revoke execute on function %s from public, anon, authenticated', f);
+  end loop;
+end
+$$;
+
+-- ---- o audit log é só-inclusão para TODO papel que não seja o dono (migration 0525) ----
+--
+-- A 0258 tirou UPDATE, DELETE e TRUNCATE de `api_audit_log` numa lista FIXA de
+-- papéis: public, anon, authenticated e service_role. Papel criado pelo
+-- operador ficava de fora — e o README do self-host manda criar um, o
+-- `agent_worker`, com `grant select, insert, update, delete on all tables`.
+-- O `update.sh` re-aplicava a 0258 sem alcançar esse papel.
+--
+-- Este bloco troca a lista por uma regra: todo papel com grant DIRETO de
+-- UPDATE, DELETE ou TRUNCATE em `api_audit_log`, exceto o dono da tabela,
+-- perde os três. Com o nome que o operador tiver dado ao papel. INSERT e
+-- SELECT ficam — o worker grava auditoria e a lê.
+--
+-- O dono fica de fora porque o privilégio dele é implícito (revogar não o
+-- alcança) e porque o expurgo legítimo, `fn_expurgar_auditoria_vencida`
+-- (0167), é `security definer` dele, assim como as FKs `on delete set null`.
+--
+-- Idempotente: na segunda passada o laço não acha ninguém. Roda a cada
+-- `update.sh`, então uma instalação que já seguiu a receita antiga se cura na
+-- próxima atualização. Sem função nova (nada a revogar de anon).
+
+do $$
+declare
+  v_papel text;
+begin
+  for v_papel in
+    select distinct case when a.grantee = 0 then 'public' else quote_ident(r.rolname) end
+      from pg_class c
+      cross join lateral aclexplode(c.relacl) a
+      left join pg_roles r on r.oid = a.grantee
+     where c.oid = 'public.api_audit_log'::regclass
+       and a.grantee <> c.relowner
+       and a.privilege_type in ('UPDATE', 'DELETE', 'TRUNCATE')
+  loop
+    execute format('revoke update, delete, truncate on table public.api_audit_log from %s', v_papel);
+  end loop;
+end
+$$;

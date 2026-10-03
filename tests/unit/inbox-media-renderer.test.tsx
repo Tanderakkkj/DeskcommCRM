@@ -34,32 +34,36 @@ function msg(over: Partial<Message>): Message {
   } as Message;
 }
 
+// Um dia depois da chegada: fora do teto do "Transcrevendo…", como estes
+// casos sempre renderizaram (o relógio virou prop no #2154).
+const UM_DIA_DEPOIS = Date.parse("2026-07-21T20:00:00.000Z") + 24 * 60 * 60_000;
+
 describe("MediaRenderer", () => {
   it("image → ImageMedia", () => {
-    render(<MediaRenderer message={msg({ type: "image" })} />);
+    render(<MediaRenderer agora={UM_DIA_DEPOIS} message={msg({ type: "image" })} />);
     expect(screen.getByAltText("Imagem recebida")).toBeInTheDocument();
   });
   it("sticker → StickerMedia", () => {
-    render(<MediaRenderer message={msg({ type: "sticker" })} />);
+    render(<MediaRenderer agora={UM_DIA_DEPOIS} message={msg({ type: "sticker" })} />);
     expect(screen.getByAltText("Figurinha")).toBeInTheDocument();
   });
   it("audio → AudioPlayer", () => {
-    render(<MediaRenderer message={msg({ type: "audio" })} />);
+    render(<MediaRenderer agora={UM_DIA_DEPOIS} message={msg({ type: "audio" })} />);
     expect(screen.getByRole("button", { name: /reproduzir/i })).toBeInTheDocument();
   });
   it("video → VideoMedia", () => {
-    const { container } = render(<MediaRenderer message={msg({ type: "video" })} />);
+    const { container } = render(<MediaRenderer agora={UM_DIA_DEPOIS} message={msg({ type: "video" })} />);
     expect(container.querySelector("video")).not.toBeNull();
   });
   it("document (e tipos desconhecidos) → DocumentCard", () => {
-    render(<MediaRenderer message={msg({ type: "document", media_mime: "application/pdf" })} />);
+    render(<MediaRenderer agora={UM_DIA_DEPOIS} message={msg({ type: "document", media_mime: "application/pdf" })} />);
     expect(screen.getByRole("link", { name: /baixar pdf/i })).toBeInTheDocument();
   });
 });
 
 describe("MediaRenderer — transcrição do áudio no balão (#2057)", () => {
   const audio = (over: Partial<Message>) =>
-    render(<MediaRenderer message={msg({ type: "audio", ...over })} />);
+    render(<MediaRenderer agora={UM_DIA_DEPOIS} message={msg({ type: "audio", ...over })} />);
 
   it("'ready' com texto mostra a transcrição abaixo do player", () => {
     audio({ media_derived_status: "ready", media_derived_text: "  oi, quero agendar  " });

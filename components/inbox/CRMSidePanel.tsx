@@ -23,6 +23,7 @@ import { apiClient } from "@/lib/api/client";
 import { toast } from "sonner";
 import type { ConversationWithContact } from "@/hooks/inbox/useConversationsRealtime";
 import { activityLabel, actorLabel, actorShape } from "@/lib/leads/activity-vocabulary";
+import { soChavesAlteradas } from "@/lib/leads/custom-fields-so-diff";
 import { ConversationTagsEditor } from "./ConversationTagsEditor";
 import { ContactTagsEditor } from "./ContactTagsEditor";
 import { useDefaultPipeline } from "@/hooks/pipelines/useDefaultPipeline";
@@ -476,14 +477,21 @@ function CamposDoFunil({
   const t = useT();
   const edit = useEditLead(pipelineId);
   const [customFields, setCustomFields] = useState(valores);
+  // A RÉGUA do diff (issue #2132): o valor carregado quando o painel abriu.
+  // Só o que a pessoa mudar daqui vai viajar — o merge é do servidor.
+  const [camposCarregados, setCamposCarregados] = useState(valores);
 
   if (fieldDefs.length === 0) {
     return <p className="text-xs text-muted-foreground">{t("Este funil não tem campos extras.")}</p>;
   }
 
   async function salvar() {
+    const payload = soChavesAlteradas(camposCarregados, customFields);
     try {
-      await edit.mutateAsync({ leadId, patch: { custom_fields: customFields } });
+      await edit.mutateAsync({ leadId, patch: { custom_fields: payload } });
+      // O que acabou de gravar vira a nova régua: o próximo salvamento não
+      // reenvia este, e uma limpeza alheia no intervalo não é atropelada.
+      setCamposCarregados({ ...customFields });
       toast.success(t("Campos atualizados"));
       onSalvo();
     } catch {
