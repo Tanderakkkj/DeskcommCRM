@@ -180,10 +180,13 @@ fi
 # Aqui já sabemos que há atualização real ou --force. Em ARM64, a release
 # inteira (quatro imagens + WAHA efetiva) é conferida no índice OCI antes de
 # backup, checkout, banco ou contêiner: recusar aqui não deixa nada pela metade.
-# Em AMD64 o comportamento segue o de antes — a sonda exige `docker buildx`,
-# que uma VPS x86_64 pode não ter, e ali toda imagem publicada tem amd64.
+# Em AMD64 não há este pré-voo: toda imagem publicada tem amd64, e o preflight
+# geral abaixo (#1955) já confere as quatro imagens em toda arquitetura.
+# Com DESKCOMM_BUILD_LOCAL o escape da #1955 vale aqui também: quem pediu
+# construção local não depende do registro, e recusá-la aqui a anularia
+# justamente com o registro fora.
 PLATAFORMA_HOST="$(plataforma_oci_do_host "$(uname -m 2>/dev/null || true)" 2>/dev/null || true)"
-if [ "$PLATAFORMA_HOST" = linux/arm64 ] && ! preflight_plataforma_atualizacao "$TARGET_TAG" "$PLATAFORMA_HOST"; then
+if [ "$PLATAFORMA_HOST" = linux/arm64 ] && ! build_local_pedido && ! preflight_plataforma_atualizacao "$TARGET_TAG" "$PLATAFORMA_HOST"; then
   refuse "A versão $TARGET_TAG não está completa para $PLATAFORMA_HOST ou a WAHA configurada é incompatível. Não alterei banco, imagens nem código. Confira o registry e repita."
 fi
 if [ -n "$MESMA_TAG" ] && [ -n "$FORCE" ]; then

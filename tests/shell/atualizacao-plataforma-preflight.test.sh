@@ -45,7 +45,7 @@ reject 'canal móvel não é update versionado' preflight_plataforma_atualizacao
 # cron do agente e o GoTrue (signup/SMTP) ficam no passo 0, antes da decisão de
 # versão, de propósito: o "só convite" tem de chegar mesmo quando o update recusa.
 updater="$(<"$ROOT/hostgator-setup-kit/update.sh")"
-before="${updater%%if \[ \"\$PLATAFORMA_HOST\" = linux/arm64 \] && ! preflight_plataforma_atualizacao *}"
+before="${updater%%if \[ \"\$PLATAFORMA_HOST\" = linux/arm64 \] && *! preflight_plataforma_atualizacao *}"
 test "$before" != "$updater" || { echo '✗ update.sh não chama preflight_plataforma_atualizacao só no ARM64'; exit 1; }
 after="${updater#*! preflight_plataforma_atualizacao *}"
 case "$before" in
@@ -61,6 +61,17 @@ case "$after" in
   *) echo '✗ ordem de backup/checkout incorreta'; exit 1 ;;
 esac
 echo '✓ update real em ARM64 consulta plataformas antes de efeitos'
+
+# O escape da #1955 (DESKCOMM_BUILD_LOCAL) não pode sumir no ARM64: com o
+# registro fora, é justamente ele que deixa atualizar. Roda o `if` REAL do
+# update.sh, com `refuse` trocado por uma saída que o teste enxerga.
+guarda="$(sed -n '/^if \[ "\$PLATAFORMA_HOST" = linux\/arm64 \]/,/^fi$/p' "$ROOT/hostgator-setup-kit/update.sh")"
+[ -n "$guarda" ] || { echo '✗ não achei a guarda de plataforma no update.sh'; exit 1; }
+roda_guarda() ( refuse() { exit 3; }; PLATAFORMA_HOST=linux/arm64 TARGET_TAG=v1.66.1; eval "$guarda" )
+TEST_OFFLINE=1
+reject 'ARM64 com registro fora e sem construção local recusa' roda_guarda
+DESKCOMM_BUILD_LOCAL=1 ok 'ARM64 com registro fora e DESKCOMM_BUILD_LOCAL=1 não recusa' roda_guarda
+unset TEST_OFFLINE
 
 test -f "$ROOT/hostgator-setup-kit/preflight-upgrade.sh" || { echo '✗ falta bootstrap legado'; exit 1; }
 echo '✓ bootstrap legado presente'
