@@ -555,9 +555,14 @@ jobs:
           # canal deixaria de ser o mesmo manifesto que a versão.
           dono=$(echo "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')
           numero="${VERSAO#v}"
+          # Confere o conjunto INTEIRO antes de mover QUALQUER ponteiro. Conferir
+          # dentro do laço de mover deixava uma falha na 3ª imagem com app e
+          # worker já em `stable` — o canal dividido da #488.
           for img in deskcommcrm deskcomm-worker deskcomm-scheduler deskcomm-voice-agent; do
             manifesto_tem_plataforma "${REGISTRY}/${dono}/${img}:${numero}" linux/amd64
             manifesto_tem_plataforma "${REGISTRY}/${dono}/${img}:${numero}" linux/arm64
+          done
+          for img in deskcommcrm deskcomm-worker deskcomm-scheduler deskcomm-voice-agent; do
             echo "::group::${img}"
             docker buildx imagetools create \
               --tag "${REGISTRY}/${dono}/${img}:stable" \
