@@ -160,6 +160,127 @@ export function diasAtePrazo(dueAt: string | Date | null | undefined, agora: Dat
   return dias === 0 ? 0 : -dias; // sem isto sai `-0` no dia do prazo
 }
 
+const HORA_MS = 3_600_000;
+const DIA_MS = 86_400_000;
+
+/**
+ * O INSTANTE em que o dia guardado acaba — a meia-noite UTC do dia seguinte.
+ * `null` quando o valor não é uma data.
+ *
+ * ## Por que esta função existe
+ *
+ * Ela é a **âncora** de todo consumidor que mede distância até o prazo. Antes de
+ * existir, o `+ 86_400_000` estava escrito à mão em dois lugares (aqui e no selo
+ * da plataforma), e as duas linhas do tempo das telas de detalhe o esqueciam:
+ * mediam até o INÍCIO do dia. Uma âncora escrita à mão é uma âncora que alguém
+ * esquece de usar.
+ *
+ * Medido (`TZ=America/Sao_Paulo`, `due_at = 2026-10-05T00:00:00.000Z`): o dia
+ * guardado acaba em `2026-10-06T00:00:00.000Z`, que é **21:00 de 05/10** no
+ * Brasil. É a herança do eixo UTC do motor (`computeDueAt`), não desta função —
+ * mudar isso é mudar o que a coluna guarda, e é decisão de produto.
+ *
+ * Devolver o INSTANTE (e não as horas) deixa o chamador escolher a unidade: a
+ * barra de progresso quer a razão, a contagem quer as horas, o selo quer comparar
+ * contra um teto.
+ */
+export function fimDoPrazo(dueAt: string | Date | null | undefined): Date | null {
+  const prazo = diaDoPrazo(dueAt);
+  if (prazo === null) return null;
+  const inicio = utcDeDiaCivil(prazo);
+  if (inicio === null) return null;
+  return new Date(inicio + DIA_MS);
+}
+
+/**
+ * O corte de "o prazo EXPIRA em até `dias` dias", como instante.
+ *
+ * ## Por que ele anda um dia para trás
+ *
+ * `due_at` é o INÍCIO do dia guardado, e quem expira é o **FIM** dele. Então um
+ * pedido que expira dentro de `dias` dias tem
+ * `due_at + 1 dia <= agora + dias dias`, ou seja
+ * `due_at <= agora + (dias - 1) dia`. Um dia, e não "quase" um: a diferença é
+ * exatamente `fimDoPrazo(due_at) - due_at`.
+ *
+ * Medido com `agora = 03/10 09:00` em São Paulo, janela de 5 dias:
+ *
+ * | dia do prazo | expira em | `due_at <= agora + 5d` | `due_at <= agora + 4d` |
+ * |---|---|---|---|
+ * | 05/10 | 60h | entra | **entra** |
+ * | 07/10 | 108h | entra | **entra** |
+ * | 08/10 | 132h | **entra** | **NÃO entra** |
+ * | 09/10 | 156h | não entra | não entra |
+ *
+ * A coluna do meio é o defeito: um pedido que expira em **5 dias e meio** entrava
+ * num KPI que promete cinco.
+ *
+ * Mora aqui, e não em cada consulta, pela mesma razão de `fimDoPrazo`: a âncora
+ * escrita à mão é a âncora que alguém esquece de mudar num dos lugares. Hoje há
+ * dois consumidores (`admin/dashboard/kpis`, o KPI e o alerta), e os dois leem
+ * este.
+ */
+export function corteDaJanela(agora: Date, dias: number): Date {
+  return new Date(agora.getTime() + (dias - 1) * DIA_MS);
+}
+
+/**
+ * A fração (0..1) da janela entre o recebimento e o FIM do dia do prazo que já
+ * passou — a barra das duas telas de detalhe. `0` quando uma das pontas não se
+ * lê: barra vazia em vez de `NaN%`.
+ *
+ * Mora aqui, e não em cada tela, para que o teste meça a conta que a tela faz, e
+ * não uma cópia dela.
+ */
+export function progressoDoPrazo(
+  receivedAt: string | Date,
+  dueAt: string | Date | null | undefined,
+  agora: Date,
+): number {
+  const fim = fimDoPrazo(dueAt);
+  const inicio = new Date(receivedAt).getTime();
+  if (fim === null || !Number.isFinite(inicio)) return 0;
+  const total = fim.getTime() - inicio;
+  if (total <= 0) return 0;
+  return Math.min(1, Math.max(0, (agora.getTime() - inicio) / total));
+}
+
+/**
+ * HORAS até o FIM do dia que `due_at` representa — `0` no último minuto do dia,
+ * negativo depois dele. `null` quando o valor não é uma data.
+ *
+ * ## Para quem precisa de horas, e não de dias
+ *
+ * O e-mail ao DPO fala em **dias** ("1 dia(s) em atraso") e usa
+ * {@link diasDeAtraso}. O painel da plataforma fala em **horas** ("12h
+ * restantes") e precisa desta. As duas coisas são a mesma âncora — o dia que o
+ * motor contou — em unidades diferentes, e é por isso que as duas superfícies
+ * viram no mesmo instante.
+ *
+ * ## O que ela NÃO finge
+ *
+ * O prazo é contado no eixo UTC pelo motor (`computeDueAt`), e o fim do dia
+ * guardado é a meia-noite UTC do dia seguinte. Numa instalação brasileira isso
+ * significa que o "fim do prazo" chega às **21h** do dia, três horas antes da
+ * meia-noite local. Isso NÃO é deste módulo: é a herança do eixo do motor, e o
+ * que este PR garante é só que as três superfícies que leem o prazo
+ * (e-mail ao DPO, balde da organização e painel da plataforma) concordem entre
+ * si. Mudar o eixo é mudar o que `computeDueAt` grava — mexe em toda linha já
+ * existida e é decisão de produto, não correção de leitura.
+ *
+ * Fracionário de propósito: quem exibe quer o inteiro (`Math.trunc`) e quem
+ * compara contra um teto quer comparar as horas cruas. Cortar aqui obrigaria um
+ * dos dois a refazer a conta.
+ */
+export function horasAteOFimDoPrazo(
+  dueAt: string | Date | null | undefined,
+  agora: Date,
+): number | null {
+  const fim = fimDoPrazo(dueAt);
+  if (fim === null) return null;
+  return (fim.getTime() - agora.getTime()) / HORA_MS;
+}
+
 /**
  * O prazo no formato de quem lê — `"DD/MM/AAAA"`.
  *

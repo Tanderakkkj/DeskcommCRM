@@ -529,6 +529,16 @@ const DA_EMPRESA: RecursoOpcional[] = [
     },
   },
   {
+    id: "mapas",
+    nome: "Endereço aproximado do pino",
+    oQueFaz: "Com uma chave do Google, o pino de localização do cliente chega com rua e cidade aproximadas.",
+    nivel: "organizacao",
+    padrao: "desligado",
+    quemDecide: "admin",
+    // A chave mora em `map_provider_credentials`, e esta lista não lê chave: o estado fica na tela.
+    href: "/app/ai/providers",
+  },
+  {
     id: "teto_de_gasto",
     nome: "Teto de gasto de IA",
     oQueFaz: "Teto mensal, aviso, e se a IA para ao chegar nele.",

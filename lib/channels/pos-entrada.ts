@@ -54,6 +54,7 @@ import type { createAdminClient } from "@/lib/supabase/admin";
 import { ehPedidoDeOptOut } from "@/lib/opt-out/deteccao";
 import { ehContatoDoNumeroInterno } from "@/lib/escalacao/numero-interno-de-aviso";
 import { acelerarPipelineDeEventos } from "@/lib/dev/kick-local-pipeline";
+import { origemDoNegocioPeloCanal } from "@/lib/channels/origem-do-negocio";
 import { autorizarContatoParaIA } from "@/lib/ai/elegibilidade/autorizacao";
 import { casarCampanha, lerCampanhas } from "@/lib/ai/elegibilidade/campanha";
 
@@ -113,6 +114,15 @@ export interface EntradaDeMensagem {
    * lendo o `event_log` meses depois, se saiba por onde a mensagem entrou.
    */
   origem: string;
+  /**
+   * O valor de `conversations.channel` desta conversa (`instagram`,
+   * `facebook`…). Ausente quer dizer WhatsApp.
+   *
+   * Este sim decide: é dele que sai a origem do negócio que nasce
+   * (`origemDoNegocioPeloCanal`). Sem ele, o negócio do direct do Instagram
+   * nascia com `source = 'whatsapp'`.
+   */
+  canal?: string;
 }
 
 /**
@@ -372,6 +382,7 @@ async function abrirDemanda(admin: Admin, entrada: EntradaDeMensagem): Promise<v
       contactId: entrada.contactId,
       conversationId: entrada.conversationId,
       nomeDoContato: entrada.nomeDoContato,
+      origem: origemDoNegocioPeloCanal(entrada.canal),
     });
 
     // Os DOIS desfechos viram log. Sem a linha do "não criou", o silêncio de

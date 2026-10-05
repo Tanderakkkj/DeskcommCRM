@@ -197,6 +197,20 @@ export async function listConversationsHandler(
     query = query.not("status", "in", `(${CONVERSATION_TERMINAL_STATUSES.join(",")})`);
   }
   if (q.channel_session_id) query = query.eq("channel_session_id", q.channel_session_id);
+  // ── O CONTATO, NO PRÓPRIO `WHERE` (#2184) ──────────────────────────────
+  //
+  // `crm_list_conversations` filtrava o contato DEPOIS do handler devolver a
+  // página: a conversa mais antiga do mesmo cliente, fora daquela página, era
+  // inalcançável — e o `has_more: false` que saía junto dizia ao agente que
+  // não havia mais nada. Filtrar antes do `.limit` é o que faz cursor e
+  // `has_more` descreverem o conjunto DO CONTATO: a próxima página continua
+  // sendo do mesmo cliente.
+  //
+  // Compondo sobre a MESMA query, que já carrega `.eq("organization_id", …)` —
+  // este handler usa o admin client, que passa por cima da RLS: o filtro
+  // manual de organização é a única barreira, e uma consulta nova nasceria
+  // sem nenhuma.
+  if (q.contact_id) query = query.eq("contact_id", q.contact_id);
   // A aba "Grupos" (Task 10). `undefined` (ausente) = sem filtro, a lista
   // mostra tudo, como hoje — checagem explícita contra `undefined`, e não
   // `if (q.is_group)`, porque `"false"` é um valor válido e verdadeiro-truthy

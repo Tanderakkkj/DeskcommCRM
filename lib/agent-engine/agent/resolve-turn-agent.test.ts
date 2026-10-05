@@ -715,3 +715,77 @@ describe('destinoDoVeredito — a régua única (regras 2 a 5, sem carregar agen
     expect(agenteDoDestino(router(), destinoDoVeredito(router(), undefined, null, null))).toBe('fallback');
   });
 });
+
+
+// ---------------------------------------------------------------------------
+// #2155 — a intenção escolhe o AGENTE e o card vai para o FUNIL do produto
+// ---------------------------------------------------------------------------
+describe('2155 — destino de funil na intenção casada', () => {
+  const comDestino = [
+    {
+      ...members[0]!,
+      destinationPipelineId: 'pipe-investimentos',
+      destinationStageId: 'stage-investimentos-1',
+    },
+    members[1]!,
+  ];
+
+  it('classificou → MESMO agente de antes E funil/etapa de destino da intenção', async () => {
+    const loadActiveRouter = vi.fn().mockResolvedValue(router({ sticky: false, members: comDestino }));
+    const classifyIntent = vi.fn().mockResolvedValue({ intentName: 'vendas', confidence: 0.9 });
+    const loadPublishedAgentConfigById = idAwareLoader();
+
+    const out = await resolveTurnAgent({} as never, {} as never,
+      { ...baseInput, signal: 'quero investir', stickyAgentId: null, stickyIntent: null },
+      makeDeps({ loadActiveRouter, classifyIntent, loadPublishedAgentConfigById }));
+
+    // As DUAS metades do defeito, presas juntas: agente escolhido E destino do card.
+    expect(out.outcome).toBe('classified');
+    expect(out.config?.agentId).toBe('agent-vendas');
+    expect(out.destinationPipelineId).toBe('pipe-investimentos');
+    expect(out.destinationStageId).toBe('stage-investimentos-1');
+  });
+
+  it('sticky também carrega o destino — o card é levado já na primeira mensagem', async () => {
+    const loadActiveRouter = vi.fn().mockResolvedValue(router({ sticky: true, members: comDestino }));
+    const classifyIntent = vi.fn().mockResolvedValue({ intentName: 'vendas', confidence: 0.9 });
+    const loadPublishedAgentConfigById = idAwareLoader();
+
+    const out = await resolveTurnAgent({} as never, {} as never,
+      { ...baseInput, signal: 'mais uma pergunta', stickyAgentId: 'agent-vendas', stickyIntent: 'vendas' },
+      makeDeps({ loadActiveRouter, classifyIntent, loadPublishedAgentConfigById }));
+
+    expect(out.outcome).toBe('sticky');
+    expect(out.config?.agentId).toBe('agent-vendas');
+    expect(out.destinationPipelineId).toBe('pipe-investimentos');
+    // O roteiro NÃO recomeça (regra antiga), mas o destino continua valendo.
+    expect(out.flowPointerId).toBeNull();
+  });
+
+  it('intenção SEM destino declarado → null: instalação com um funil não muda', async () => {
+    const loadActiveRouter = vi.fn().mockResolvedValue(router({ sticky: false }));
+    const classifyIntent = vi.fn().mockResolvedValue({ intentName: 'vendas', confidence: 0.9 });
+    const loadPublishedAgentConfigById = idAwareLoader();
+
+    const out = await resolveTurnAgent({} as never, {} as never,
+      { ...baseInput, signal: 'quanto custa?', stickyAgentId: null, stickyIntent: null },
+      makeDeps({ loadActiveRouter, classifyIntent, loadPublishedAgentConfigById }));
+
+    expect(out.outcome).toBe('classified');
+    expect(out.destinationPipelineId).toBeNull();
+  });
+
+  it("caminho de reserva (fallback) NÃO herda destino de intenção nenhuma", async () => {
+    const loadActiveRouter = vi.fn().mockResolvedValue(router({ sticky: false, fallbackAgentId: 'agent-reserva', members: comDestino }));
+    const classifyIntent = vi.fn().mockResolvedValue({ intentName: 'inexistente', confidence: 0.99 });
+    const loadPublishedAgentConfigById = idAwareLoader();
+
+    const out = await resolveTurnAgent({} as never, {} as never,
+      { ...baseInput, signal: 'oi', stickyAgentId: null, stickyIntent: null },
+      makeDeps({ loadActiveRouter, classifyIntent, loadPublishedAgentConfigById }));
+
+    expect(out.outcome).toBe('fallback');
+    expect(out.config?.agentId).toBe('agent-reserva');
+    expect(out.destinationPipelineId ?? null).toBeNull();
+  });
+});

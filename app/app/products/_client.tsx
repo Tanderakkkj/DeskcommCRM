@@ -12,6 +12,8 @@ import { MAXIMO_DE_FOTOS } from "@/lib/catalogo/fotos";
 import { formatCents } from "@/lib/money";
 import { precoParaCentavos, type Produto } from "@/lib/schemas/produtos";
 
+import { EdicaoDoProduto } from "./_edicao";
+
 interface Textos {
   titulo: string;
   subtitulo: string;
@@ -228,6 +230,7 @@ export function ProdutosClient({
   const [resumo, setResumo] = React.useState<ResumoDaImportacao | null>(null);
   const arquivoRef = React.useRef<HTMLInputElement>(null);
   const [fotosAbertas, setFotosAbertas] = React.useState<string | null>(null);
+  const [editando, setEditando] = React.useState<string | null>(null);
 
   const filtrados = React.useMemo(() => {
     const q = busca.trim().toLowerCase();
@@ -516,6 +519,15 @@ export function ProdutosClient({
                   <Button
                     variant="ghost"
                     size="sm"
+                    onClick={() => setEditando((v) => (v === p.id ? null : p.id))}
+                    aria-expanded={editando === p.id}
+                    data-testid={`editar-${p.codigo}`}
+                  >
+                    {t("Editar")}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setFotosAbertas((v) => (v === p.id ? null : p.id))}
                     aria-expanded={fotosAbertas === p.id}
                     data-testid={`abrir-fotos-${p.codigo}`}
@@ -535,6 +547,12 @@ export function ProdutosClient({
             </div>
             {podeEditar && fotosAbertas === p.id ? (
               <FotosDoProduto produto={p} urls={urlsDasFotos} />
+            ) : null}
+            {podeEditar && editando === p.id ? (
+              // `key` porque o painel fica na MESMA posição do DOM ao trocar de
+              // produto: sem ela o React reaproveita o estado e o formulário
+              // abriria preenchido com o produto anterior.
+              <EdicaoDoProduto key={p.id} produto={p} aoFechar={() => setEditando(null)} />
             ) : null}
             </li>
             );

@@ -103,6 +103,14 @@ export interface TurnAgentResolution {
    * — fallback/sem-router NÃO começam fluxo.
    */
   flowPointerId?: string | null;
+  /**
+   * Funil/etapa de DESTINO da intenção casada (#2155). Valem também em sticky:
+   * o card é levado ao funil do produto na PRIMEIRA mensagem e fica lá — a
+   * transferência idempotente (`ja_no_destino`) não reprocessa os seguintes.
+   * `null`/ausente = sem destino configurado, nada muda.
+   */
+  destinationPipelineId?: string | null;
+  destinationStageId?: string | null;
 }
 
 export interface ResolveTurnAgentDeps {
@@ -315,6 +323,8 @@ export async function resolveTurnAgent(
         // conversa em curso: devolvê-lo recomeçaria o roteiro a cada turno — e,
         // depois de concluído, de novo, para sempre.
         flowPointerId: outcome === 'sticky' ? null : (member.flowPointerId ?? null),
+        destinationPipelineId: member.destinationPipelineId ?? null,
+        destinationStageId: member.destinationStageId ?? null,
       };
     };
 
