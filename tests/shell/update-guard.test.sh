@@ -263,10 +263,13 @@ echo "── 3. --force é a saída explícita de quem quer mesmo voltar"
 : > "$DOCKER_LOG"
 run_update --to v0.9.0 --force
 check "passou da guarda e rodou o backup" test -f "$BACKUP_MARK"
-# O pré-voo OCI é só do ARM64: ele exige `docker buildx`, que uma VPS x86_64
-# pode não ter, e lá recusaria toda atualização. Este dublê de docker não
-# responde a `imagetools` — se o AMD64 voltar a sondar, a linha aparece aqui.
-check "em AMD64 a atualização não consulta o buildx" bash -c "! grep -q 'imagetools' '$DOCKER_LOG'"
+# O pré-voo de PLATAFORMA (`preflight_plataforma_atualizacao`) é só do ARM64:
+# no AMD64 toda imagem publicada tem amd64. O preflight geral da #1955
+# (`preflight_atualizacao`) consulta o buildx em toda arquitetura, de propósito
+# e com motivo nomeado — por isso a régua aqui é a RECUSA do pré-voo ARM, não
+# o `imagetools` no log do docker. Se o AMD64 voltar a passar por ele, este
+# dublê (sem registro) faz o pré-voo recusar, e a mensagem aparece na saída.
+check "em AMD64 a atualização não passa pelo pré-voo de plataforma do ARM64" bash -c "! grep -q 'não está completa para' '$OUTFILE'"
 
 echo "── 4. Atualização de verdade grava a imagem no .env, sem duplicar a chave"
 # Estado de quem sofreu um rollback antes: o agente deixou a imagem apontando
