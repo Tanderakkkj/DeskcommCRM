@@ -183,7 +183,7 @@ fi
 # Em AMD64 o comportamento segue o de antes — a sonda exige `docker buildx`,
 # que uma VPS x86_64 pode não ter, e ali toda imagem publicada tem amd64.
 PLATAFORMA_HOST="$(plataforma_oci_do_host "$(uname -m 2>/dev/null || true)" 2>/dev/null || true)"
-if [ "$PLATAFORMA_HOST" = linux/arm64 ] && ! preflight_atualizacao "$TARGET_TAG" "$PLATAFORMA_HOST"; then
+if [ "$PLATAFORMA_HOST" = linux/arm64 ] && ! preflight_plataforma_atualizacao "$TARGET_TAG" "$PLATAFORMA_HOST"; then
   refuse "A versão $TARGET_TAG não está completa para $PLATAFORMA_HOST ou a WAHA configurada é incompatível. Não alterei banco, imagens nem código. Confira o registry e repita."
 fi
 if [ -n "$MESMA_TAG" ] && [ -n "$FORCE" ]; then

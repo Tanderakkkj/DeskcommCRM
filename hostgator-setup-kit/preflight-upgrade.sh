@@ -34,7 +34,7 @@ PLATAFORMA="$(plataforma_oci_do_host "$(uname -m 2>/dev/null || true)")" || {
   printf 'Sem imagem nativa para este host; o pré-voo não pode aprovar a atualização.\n' >&2
   exit 1
 }
-preflight_atualizacao "$TARGET_TAG" "$PLATAFORMA" || {
+preflight_plataforma_atualizacao "$TARGET_TAG" "$PLATAFORMA" || {
   printf 'Atualização recusada antes de qualquer escrita. Não rode o updater antigo para este alvo.\n' >&2
   exit 1
 }

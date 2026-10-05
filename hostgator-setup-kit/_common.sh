@@ -1878,7 +1878,7 @@ preflight_instalacao() { # <X.Y.Z> <linux/platform> <WAHA_IMAGE efetiva>
 # defaults AMD64 conhecidos serão migrados por gravar_imagens DEPOIS do backup;
 # a sonda usa o destino futuro para não rejeitar falsamente a instalação.
 # WAHA customizada/Plus nunca é substituída nem na sonda nem no update.
-preflight_atualizacao() { # <vX.Y.Z> <linux/platform>; usa WAHA_IMAGE carregada
+preflight_plataforma_atualizacao() { # <vX.Y.Z> <linux/platform>; usa WAHA_IMAGE carregada
   local tag="${1:-}" plataforma="${2:-}" versao waha
   if ! [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     printf 'Atualização exige tag numérica publicada (vX.Y.Z): %s\n' "$tag" >&2

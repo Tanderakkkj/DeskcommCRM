@@ -95,7 +95,7 @@
 
 **Interfaces:**
 - Consumes: Task 1's first-party/WAHA platform probe.
-- Produces: `preflight_atualizacao <target-tag> <linux/platform> -> 0|nonzero`; `bash <new-kit>/hostgator-setup-kit/preflight-upgrade.sh --installation <existing-dir> --to vX.Y.Z` is the one-time read-only bootstrap before an old updater runs. Same-version no-op keeps existing SMTP/signup-mode/cron maintenance, while a rejected update leaves checkout, DB and app version unchanged.
+- Produces: `preflight_plataforma_atualizacao <target-tag> <linux/platform> -> 0|nonzero`; `bash <new-kit>/hostgator-setup-kit/preflight-upgrade.sh --installation <existing-dir> --to vX.Y.Z` is the one-time read-only bootstrap before an old updater runs. Same-version no-op keeps existing SMTP/signup-mode/cron maintenance, while a rejected update leaves checkout, DB and app version unchanged.
 
 - [ ] **Step 1: Write failing tests** for a target that lacks ARM64, four complete images, absent network, explicit custom WAHA, same-version no-op, and an old updater's first transition. Record that the script currently performs single-server sync and cron setup before deciding version, and test that a rejected *real update* performs neither.
 - [ ] **Step 2: Run** the new test; expected failure before any code changes.

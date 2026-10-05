@@ -19,35 +19,35 @@ ok() { local name="$1"; shift; "$@" >"$TMP/out" 2>&1 || { echo "✗ $name: $(<"$
 reject() { local name="$1"; shift; if "$@" >"$TMP/out" 2>&1; then echo "✗ $name aceito"; exit 1; fi; echo "✓ $name"; }
 
 WAHA_IMAGE=devlikeapro/waha:latest-2026.7.2
-ok 'release completa em AMD64' preflight_atualizacao v1.66.1 linux/amd64
+ok 'release completa em AMD64' preflight_plataforma_atualizacao v1.66.1 linux/amd64
 grep -q 'deskcomm-voice-agent:1.66.1 linux/amd64' "$TMP/probes"
 TEST_MISSING=deskcomm-voice-agent
-reject 'a quarta imagem ausente recusa update' preflight_atualizacao v1.66.2 linux/arm64
+reject 'a quarta imagem ausente recusa update' preflight_plataforma_atualizacao v1.66.2 linux/arm64
 unset TEST_MISSING
 TEST_OFFLINE=1
-reject 'registry indisponível recusa update' preflight_atualizacao v1.66.1 linux/arm64
+reject 'registry indisponível recusa update' preflight_plataforma_atualizacao v1.66.1 linux/arm64
 unset TEST_OFFLINE
 TEST_BAD_IMAGE=registry.exemplo/waha-plus:custom
 WAHA_IMAGE="$TEST_BAD_IMAGE"
-reject 'WAHA customizada incompatível é preservada e recusada' preflight_atualizacao v1.66.1 linux/arm64
+reject 'WAHA customizada incompatível é preservada e recusada' preflight_plataforma_atualizacao v1.66.1 linux/arm64
 test "$WAHA_IMAGE" = "$TEST_BAD_IMAGE"
 unset TEST_BAD_IMAGE
-ok 'WAHA Plus customizada compatível passa' preflight_atualizacao v1.66.1 linux/arm64
+ok 'WAHA Plus customizada compatível passa' preflight_plataforma_atualizacao v1.66.1 linux/arm64
 grep -q 'registry.exemplo/waha-plus:custom linux/arm64' "$TMP/probes"
 WAHA_IMAGE=devlikeapro/waha:latest-2026.7.2
-ok 'WAHA padrão antiga migra só na sonda ARM64' preflight_atualizacao v1.66.1 linux/arm64
+ok 'WAHA padrão antiga migra só na sonda ARM64' preflight_plataforma_atualizacao v1.66.1 linux/arm64
 grep -q 'devlikeapro/waha:noweb-arm-2026.7.2 linux/arm64' "$TMP/probes"
 test "$WAHA_IMAGE" = devlikeapro/waha:latest-2026.7.2
-reject 'canal móvel não é update versionado' preflight_atualizacao stable linux/arm64
+reject 'canal móvel não é update versionado' preflight_plataforma_atualizacao stable linux/arm64
 
 # O updater decide no-op/downgrade antes do preflight. Uma atualização real
 # recusada em ARM64 não pode ter feito backup, checkout ou tocado no banco. O
 # cron do agente e o GoTrue (signup/SMTP) ficam no passo 0, antes da decisão de
 # versão, de propósito: o "só convite" tem de chegar mesmo quando o update recusa.
 updater="$(<"$ROOT/hostgator-setup-kit/update.sh")"
-before="${updater%%if \[ \"\$PLATAFORMA_HOST\" = linux/arm64 \] && ! preflight_atualizacao *}"
-test "$before" != "$updater" || { echo '✗ update.sh não chama preflight_atualizacao só no ARM64'; exit 1; }
-after="${updater#*! preflight_atualizacao *}"
+before="${updater%%if \[ \"\$PLATAFORMA_HOST\" = linux/arm64 \] && ! preflight_plataforma_atualizacao *}"
+test "$before" != "$updater" || { echo '✗ update.sh não chama preflight_plataforma_atualizacao só no ARM64'; exit 1; }
+after="${updater#*! preflight_plataforma_atualizacao *}"
 case "$before" in
   *'bash "$KIT_DIR/backup.sh"'*|*'git checkout --quiet'*|*'atualizar_supabase_single_server ||'*)
     echo '✗ atualização altera estado antes do preflight'; exit 1 ;;
@@ -101,3 +101,12 @@ PATH="$TMP/bin:$PATH" bash "$ROOT/hostgator-setup-kit/preflight-upgrade.sh" \
 cmp -s "$TMP/instalacao/.env" "$TMP/env-antes" || { echo '✗ bootstrap escreveu no .env'; exit 1; }
 ! grep -q segredo-que-nao-pode-sair "$TMP/cli-out" || { echo '✗ segredo apareceu na saída'; exit 1; }
 echo '✓ bootstrap legado só lê e não divulga segredo'
+
+# O update.sh carrega estes arquivos juntos, e em bash a ÚLTIMA definição de um
+# nome vence sem aviso. O merge com a #1955 produziu exatamente isso: dois
+# `preflight_atualizacao` no _common.sh, e o do ARM64 (2 argumentos, motivo no
+# stderr) calou o preflight geral que o update.sh chama com 1 argumento.
+dup="$(cat "$ROOT"/hostgator-setup-kit/{_i18n,_manifestos,_common,_supabase-images,manutencao}.sh \
+  | grep -oE '^[A-Za-z_][A-Za-z0-9_]*\(\)' | sort | uniq -d)"
+[ -z "$dup" ] || { echo "✗ função definida duas vezes no kit: $dup"; exit 1; }
+echo '✓ nenhuma função do kit é definida duas vezes'
